@@ -326,9 +326,9 @@ export function injectStyle() {
   try {
     // v 参数用于让浏览器更新样式表缓存，改样式时记得改这个号。
     // 路径从 import.meta.url 推 —— 插件目录以后改名不用再动这里。
-    href = new URL("./style.css?v=1.3.0", import.meta.url).href;
+    href = new URL("./style.css?v=1.3.1", import.meta.url).href;
   } catch (e) {
-    href = "/extensions/ComfyUI_SummonDeck/style.css?v=1.3.0";
+    href = "/extensions/ComfyUI_SummonDeck/style.css?v=1.3.1";
   }
   if (document.querySelector(`link[data-cw-style="1"]`)) return;
   const link = document.createElement("link");

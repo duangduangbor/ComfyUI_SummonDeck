@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | 1.3.0 |
+| 版本 | 1.3.1 |
 | 归档日期 | 2026-11-11 |
 | 运行环境 | Windows 10 · ComfyUI · Python 3.13 (venv) · RTX 2080 SUPER 8G |
 | 插件目录 | `ComfyUI/custom_nodes/ComfyUI_SummonDeck/` |
@@ -161,6 +161,10 @@ user/default/character_workbench/
 
 **Windows 下 Git Bash 路径与原生 Python 不互通。** `/tmp/x.json` 在 bash 里能读写，`D:/ComfyUI/venv/Scripts/python.exe` 读不到。跨语言传文件一律用 `C:/Users/.../AppData/Local/Temp/` 这种绝对 Windows 路径。
 
+**全屏浮层被别人的按钮戳穿。** 大图查看器给 `z-index: 12900` 看着够高，实测标题栏仍被一个「Models」按钮压住 —— 那是别的工作流插件用 Chakra portal 挂的常驻浮层，`z-index: 9999999`。生态里没人遵守同一套层级，全屏模态只能给到 `2147483000`。教训：**z-index 不要跟 ComfyUI 自己比，要跟装了哪些插件比**。
+
+**Esc 监听挂错层会被自己人吃掉。** 补图面板在 `document` 捕获阶段监听 Esc（跑任务时先拦一句）。大图查看器如果也挂 `document`，因为同节点捕获监听按注册顺序执行，后注册的收不到已经 `stopPropagation` 的事件 —— 按 Esc 会把整个面板关掉。挂到更外层的 `window` 捕获阶段才能先吃掉。
+
 ---
 
 ## 8. 性能基线（本机实测）
@@ -185,6 +189,7 @@ user/default/character_workbench/
 | 1.1 | AI 补图（Qwen 参考编辑 / FLUX2 整表 / Krea2 整表）、预设探测、画布内改工作流 |
 | 1.2 | 补图面板：多视图、角度引导、手动上传走裁切、同角度覆盖、任务接回、删除连带缩略图 |
 | **1.3** | **改名 怪兽牌组 / SummonDeck；视图改缩略图卡 + 悬停「AI 补这张 / 手动上传」；抽屉「＋」也走裁切；裁切比例按钮修原图比例态** |
+| 1.3.1 | 缩略图点开看大图（← → 翻页、1:1 实际像素、Esc 只关大图）；底部「保存」写回身份描述，关面板自动落盘 |
 
 ---
 

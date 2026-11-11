@@ -2813,3 +2813,300 @@
   color: var(--cw-accent);
   background: var(--cw-accent-soft);
 }
+
+/* ==========================================================================
+   v1.3.1 —— 大图查看 + 补图面板保存
+   ========================================================================== */
+
+/* ---------- 缩略图：能点开的地方给个放大镜光标 ---------- */
+
+.cw-sup-vthumb img,
+.cw-sup-item-pic img {
+  cursor: zoom-in;
+  transition: filter 0.14s;
+}
+
+.cw-sup-vthumb:hover img {
+  filter: brightness(0.92);
+}
+
+.cw-sup-item-pic {
+  cursor: zoom-in;
+}
+
+/* ---------- 大图查看 ---------- */
+
+.cw-lb-mask {
+  position: fixed;
+  inset: 0;
+  /* 为什么要这么大：ComfyUI 生态里有插件把自己的浮层挂在 Chakra portal 上，
+     z-index 用到 9999999（本机是工作流管理器的 Models 按钮）。
+     看图是全屏模态，必须盖住这些常驻浮层，否则标题栏会被别人的按钮戳穿。 */
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 26px 74px;
+  background: rgba(10, 9, 8, 0.9);
+  backdrop-filter: blur(6px);
+  font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.cw-lb {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(1400px, 100%);
+  height: 100%;
+  min-height: 0;
+}
+
+.cw-lb-head {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 14px;
+  padding: 0 2px 10px;
+  min-height: 40px;
+}
+
+/* 标题跟着图走：大图永远居中，所以标题也居中，别贴着屏幕左上角 */
+.cw-lb-caption {
+  min-width: 0;
+  max-width: calc(100% - 320px);
+  text-align: center;
+}
+
+.cw-lb-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f3efea;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cw-lb-sub {
+  margin-top: 3px;
+  font-size: 11.5px;
+  color: rgba(240, 235, 230, 0.56);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cw-lb-tools {
+  position: absolute;
+  right: 2px;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cw-lb-counter {
+  font-size: 11.5px;
+  color: rgba(240, 235, 230, 0.5);
+  font-variant-numeric: tabular-nums;
+  margin-right: 2px;
+}
+
+.cw-lb-tool {
+  padding: 5px 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  color: #efeae4;
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
+  white-space: nowrap;
+}
+
+.cw-lb-tool:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.cw-lb-tool.is-on {
+  background: rgba(217, 96, 60, 0.85);
+  border-color: rgba(217, 96, 60, 0.9);
+  color: #fff;
+}
+
+.cw-lb-close {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  color: #efeae4;
+  font-size: 14px;
+  line-height: 1;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cw-lb-close:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.cw-lb-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 12px;
+  background:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.03) 75%) 0 0 / 22px 22px,
+    linear-gradient(45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.03) 75%) 11px 11px / 22px 22px,
+    rgba(0, 0, 0, 0.3);
+}
+
+.cw-lb-stage.is-actual {
+  overflow: auto;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.cw-lb-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+  border-radius: 8px;
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.55);
+  cursor: zoom-in;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.cw-lb-stage.is-actual .cw-lb-img {
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  cursor: zoom-out;
+}
+
+/* 图还没到，先别闪一片黑 */
+.cw-lb-stage.is-loading::after {
+  content: "载入中…";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11.5px;
+  color: rgba(240, 235, 230, 0.45);
+  pointer-events: none;
+}
+
+.cw-lb-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2ede8;
+  font-size: 22px;
+  line-height: 1;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.14s;
+  z-index: 1;
+}
+
+.cw-lb-nav:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.cw-lb-nav:disabled {
+  opacity: 0.2;
+  cursor: default;
+}
+
+.cw-lb-nav.is-prev {
+  left: 12px;
+}
+
+.cw-lb-nav.is-next {
+  right: 12px;
+}
+
+.cw-lb-hint {
+  flex: 0 0 auto;
+  padding: 9px 2px 0;
+  font-size: 11px;
+  color: rgba(240, 235, 230, 0.38);
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .cw-lb-mask {
+    padding: 14px 12px;
+  }
+  .cw-lb-head {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .cw-lb-caption {
+    max-width: 100%;
+    text-align: left;
+  }
+  .cw-lb-tools {
+    position: static;
+  }
+  .cw-lb-hint {
+    display: none;
+  }
+  .cw-lb-nav {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* ---------- 补图面板：底部保存 ---------- */
+
+.cw-sup-foot-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 有未保存的改动时，按钮自己会亮起来 —— 不用另外加提示文字 */
+.cw-sup-save.is-dirty {
+  border-color: var(--cw-accent);
+  color: var(--cw-accent);
+  background: var(--cw-accent-soft);
+}
+
+.cw-sup-save.is-dirty::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--cw-accent);
+  vertical-align: 1px;
+}
+
+.cw-sup-save.is-ok {
+  border-color: #3f9b6a;
+  color: #3f9b6a;
+  background: rgba(63, 155, 106, 0.1);
+}

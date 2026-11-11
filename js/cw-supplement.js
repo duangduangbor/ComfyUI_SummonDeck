@@ -15,6 +15,7 @@
 import { cwApi, el, toast, assetUrl, isDarkTheme } from "./cw-core.js";
 import { openPresetEditor } from "./cw-wfedit.js";
 import { openCrop } from "./cw-crop.js";
+import { openLightbox } from "./cw-lightbox.js";
 
 const VIEW_LABELS = {
   face: "面部特写",
@@ -46,6 +47,7 @@ function isSupplementExtra(e) {
 
 let pollTimer = null;
 let escHandler = null;
+let saveKeyHandler = null;
 
 function stopPolling() {
   if (pollTimer) {
@@ -60,6 +62,10 @@ function clearOldPanel() {
   if (escHandler) {
     document.removeEventListener("keydown", escHandler, true);
     escHandler = null;
+  }
+  if (saveKeyHandler) {
+    document.removeEventListener("keydown", saveKeyHandler, true);
+    saveKeyHandler = null;
   }
 }
 
@@ -128,6 +134,65 @@ export async function openSupplement(cardId) {
 
   const curPreset = () => presets.presets.find((p) => p.id === st.presetId) || null;
 
+  /* ---------- 大图：三处图片区各自成一组 ---------- */
+
+  /**
+   * 一排视图卡的可看大图。没补过的格子也放进来（显示的是底稿），
+   * 这样点开后 ← → 能在整张设定表之间连着看，方便比较角度是否一致。
+   */
+  const viewGallery = () => {
+    const p = curPreset();
+    if (!p || p.mode !== "set") return [];
+    return (p.views || [])
+      .map((v) => {
+        const info = viewInfoOf(v);
+        const own = st.extras.filter((e) => e.view === v);
+        const src = own.length ? (own[0].file || own[0].thumb) : card.main;
+        if (!src) return null;
+        return {
+          key: v,
+          src: assetUrl(src, own.length ? own[0].createdAt || 0 : 0),
+          title: info.label,
+          sub: own.length
+            ? own[0].source === "upload"
+              ? "手动上传"
+              : own[0].seed
+                ? `AI 出图 · seed ${own[0].seed}`
+                : "AI 出图"
+            : "还没补这个角度 · 这里显示的是卡片底稿",
+        };
+      })
+      .filter(Boolean);
+  };
+
+  const extrasSorted = () =>
+    [...st.extras].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  const ownedGallery = () =>
+    extrasSorted()
+      .map((ex) => {
+        const src = ex.file || ex.thumb;
+        if (!src) return null;
+        return {
+          key: ex.file || ex.createdAt,
+          src: assetUrl(src, ex.createdAt || 0),
+          title: ex.view ? viewInfoOf(ex.view).label : ex.label || "补图",
+          sub: ex.source === "upload"
+            ? "手动上传"
+            : ex.seed
+              ? `AI 出图 · seed ${ex.seed}`
+              : "AI 出图",
+        };
+      })
+      .filter(Boolean);
+
+  /** 在相册里定位到某个 key 再打开；key 找不到就从头开始 */
+  const openIn = (items, key) => {
+    if (!items.length) return;
+    const i = items.findIndex((it) => it.key === key);
+    openLightbox(items, i < 0 ? 0 : i);
+  };
+
   /* ---------- 骨架 ---------- */
   const presetBox = el("div", { class: "cw-sup-presets" });
   const viewBox = el("div", { class: "cw-sup-views" });
@@ -161,6 +226,16 @@ export async function openSupplement(cardId) {
   ]);
 
   const startBtn = el("button", { class: "cw-btn-lg cw-primary", text: "开始补图" });
+
+  // 补出来的图出完就已经写进卡里了，唯一会丢的是这段身份描述 ——
+  // 以前它只在「开始补图」时随任务带出去，手打完直接关面板就白写了。
+  const saveBtn = el("button", {
+    class: "cw-btn-lg cw-sup-save",
+    type: "button",
+    text: "保存",
+    title: "把身份描述写回卡片（Ctrl+S）。补出来的图出完就已经在卡里了。",
+  });
+
   const statusLine = el("div", { class: "cw-sup-status" });
   const closeBtn = el("button", { class: "cw-iconbtn", text: "✕" });
   const wfBtn = el("button", {
@@ -168,11 +243,11 @@ export async function openSupplement(cardId) {
     type: "button",
     text: "编辑工作流",
     title: "把当前这套做法载入画布，改节点 / 换 LoRA / 调步数",
-    onclick: () => {
+    onclick: async () => {
       const p = curPreset();
       if (!p) return toast("先选一套做法");
-      close();
-      openPresetEditor(p.id, p.label);
+      // close 会先把没保存的描述落盘，存不上就别切走
+      if (await close()) openPresetEditor(p.id, p.label);
     },
   });
 
@@ -206,7 +281,10 @@ export async function openSupplement(cardId) {
       el("div", { class: "cw-sup-head-right" }, [wfBtn, closeBtn]),
     ]),
     bodyEl,
-    el("div", { class: "cw-sup-foot" }, [statusLine, startBtn]),
+    el("div", { class: "cw-sup-foot" }, [
+      statusLine,
+      el("div", { class: "cw-sup-foot-actions" }, [saveBtn, startBtn]),
+    ]),
   ]);
 
   // 这个面板可能从卡库打开（那里已有 .cw-shell 变量），也可能单独出现，
@@ -363,7 +441,8 @@ export async function openSupplement(cardId) {
       viewHint.textContent =
         "整表一次画进一张图，所以这里没有逐格上传 —— 想按角度一张张补齐，换「逐张补图」那套做法。";
       identHint.textContent =
-        "默认以卡片底稿为参考图。这里补的是「图里看不清」的部分 —— 写具体一点有帮助，写长了反而会抢镜。";
+        "默认以卡片底稿为参考图。这里补的是「图里看不清」的部分 —— 写具体一点有帮助，写长了反而会抢镜。" +
+        "改完点右下「保存」，或者直接关掉面板，都会写回卡片。";
       return;
     }
 
@@ -382,13 +461,18 @@ export async function openSupplement(cardId) {
         class: "cw-sup-vthumb" + (mine.length ? " is-filled" : ""),
       });
       if (src) {
-        thumb.append(
-          el("img", {
-            src: assetUrl(src, mine.length ? mine[0].createdAt || 0 : 0),
-            alt: "",
-            draggable: "false",
-          })
-        );
+        const pic = el("img", {
+          src: assetUrl(src, mine.length ? mine[0].createdAt || 0 : 0),
+          alt: "",
+          draggable: "false",
+          title: "点开看大图（← → 可在这排视图之间切换）",
+        });
+        // 点图看大图；点卡的其他地方才是勾选，两者不能混
+        pic.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openIn(viewGallery(), v);
+        });
+        thumb.append(pic);
       } else {
         thumb.append(el("div", { class: "cw-sup-vph", text: info.label }));
       }
@@ -462,10 +546,11 @@ export async function openSupplement(cardId) {
 
     viewHint.textContent =
       "鼠标移到任意一格上，会浮出「AI 补这张」和「手动上传」—— " +
-      "只补一个角度不用勾选，点它就行。底部的「开始补图」跑的是所有打了 ✓ 的格子。";
+      "只补一个角度不用勾选，点它就行。底部的「开始补图」跑的是所有打了 ✓ 的格子。" +
+      "点图片本身可以放大看细节（← → 在这排视图间切换）。";
     identHint.textContent =
       "每个视图都是「把底稿改成那个角度」，身份由参考图锚定。这里填的是补丁：" +
-      "图里看不清的颜色、配饰、纹样 —— 留空也能跑。";
+      "图里看不清的颜色、配饰、纹样 —— 留空也能跑。改完点「保存」（Ctrl+S）写回卡片。";
   };
 
   /* ---------- 已补过的图 ---------- */
@@ -492,11 +577,18 @@ export async function openSupplement(cardId) {
     for (const ex of list) {
       const row = el("div", { class: "cw-sup-item" });
 
-      const pic = el("div", { class: "cw-sup-item-pic" });
+      const pic = el("div", {
+        class: "cw-sup-item-pic",
+        title: "点开看大图",
+      });
       const thumb = ex.thumb || ex.file;
       if (thumb) {
         pic.append(el("img", { src: assetUrl(thumb, ex.createdAt || 0), alt: "" }));
       }
+      pic.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openIn(ownedGallery(), ex.file || ex.createdAt);
+      });
 
       const meta = el("div", { class: "cw-sup-item-meta" }, [
         el("div", {
@@ -577,13 +669,28 @@ export async function openSupplement(cardId) {
       setTimeout(() => resultWrap.scrollIntoView({ block: "nearest", behavior: "smooth" }), 0);
     }
 
+    // 这一批已经出好的图，点开能连着比较
+    const jobGallery = () =>
+      (job.items || [])
+        .filter((i) => i.status === "done" && i.file)
+        .map((i) => ({
+          key: i.file,
+          src: assetUrl(i.file, Date.now()),
+          title: i.label || i.key,
+          sub: i.seed ? `seed ${i.seed}` : "",
+        }));
+
     for (const it of job.items) {
       const thumb = it.thumb || it.file;
       const row = el("div", { class: "cw-sup-item" });
 
-      const pic = el("div", { class: "cw-sup-item-pic" });
+      const pic = el("div", { class: "cw-sup-item-pic", title: "点开看大图" });
       if (thumb) {
         pic.append(el("img", { src: assetUrl(thumb, Date.now()), alt: "" }));
+        pic.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openIn(jobGallery(), it.file);
+        });
       } else {
         pic.append(el("span", { class: "cw-sup-item-ph", text: it.status === "running" ? "…" : "·" }));
       }
@@ -748,13 +855,98 @@ export async function openSupplement(cardId) {
     }
   });
 
-  const close = () => {
+  /* ---------- 保存身份描述 ---------- */
+
+  // 面板里唯一会丢的东西。图片轮询一结束就已经写进卡里了，
+  // 身份描述却只跟任务走，不落盘 —— 所以这里给它一条明确的出路。
+  let savedIdentity = (card.identity || "").trim();
+
+  const isDirty = () => identInput.value.trim() !== savedIdentity;
+
+  const syncSave = () => {
+    const dirty = isDirty();
+    saveBtn.classList.toggle("is-dirty", dirty);
+    saveBtn.title = dirty
+      ? "身份描述有改动，点这里写回卡片（Ctrl+S）"
+      : "身份描述已是最新；补出来的图出完就已经在卡里了";
+  };
+
+  let saveOkTimer = null;
+
+  /** @returns {Promise<boolean>} 是否确认落盘成功 */
+  const saveIdentity = async ({ quiet = false } = {}) => {
+    if (!isDirty()) {
+      if (!quiet) {
+        statusLine.textContent = "身份描述已是最新，没有要保存的改动";
+      }
+      return true;
+    }
+
+    const value = identInput.value.trim();
+    saveBtn.disabled = true;
+    try {
+      await cwApi.updateCard(cardId, { identity: value });
+      savedIdentity = value;
+      card.identity = value; // 本面板后续提交直接用新值，不必重读卡库
+      syncSave();
+
+      saveBtn.textContent = "已保存";
+      saveBtn.classList.add("is-ok");
+      clearTimeout(saveOkTimer);
+      saveOkTimer = setTimeout(() => {
+        saveBtn.textContent = "保存";
+        saveBtn.classList.remove("is-ok");
+      }, 1500);
+
+      if (!quiet) toast("身份描述已保存");
+      return true;
+    } catch (e) {
+      toast("保存失败：" + e.message);
+      return false;
+    } finally {
+      saveBtn.disabled = false;
+    }
+  };
+
+  saveBtn.addEventListener("click", () => saveIdentity());
+  identInput.addEventListener("input", syncSave);
+
+  // Ctrl/⌘ + S：手在键盘上时不用去够鼠标
+  const onSaveKey = (e) => {
+    if (!(e.key === "s" || e.key === "S") || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    saveIdentity();
+  };
+  saveKeyHandler = onSaveKey;
+  document.addEventListener("keydown", onSaveKey, true);
+
+  /* ---------- 关闭 ---------- */
+
+  /**
+   * 关面板不该吞掉刚打的字：有改动就先落盘，落盘失败就留在原地。
+   * @returns {Promise<boolean>} 是否已经关掉
+   */
+  const close = async () => {
+    if (isDirty()) {
+      const ok = await saveIdentity({ quiet: true });
+      if (!ok) {
+        statusLine.textContent = "身份描述没保存成功，先别关面板";
+        return false;
+      }
+      toast("身份描述已保存");
+    }
     stopPolling();
+    if (saveKeyHandler === onSaveKey) {
+      document.removeEventListener("keydown", onSaveKey, true);
+      saveKeyHandler = null;
+    }
     if (escHandler === onEsc) {
       document.removeEventListener("keydown", onEsc, true);
       escHandler = null;
     }
     mask.remove();
+    return true;
   };
 
   // 以前点面板外就关，误触太高 —— 表单长、跑一张要六分钟，
@@ -775,6 +967,7 @@ export async function openSupplement(cardId) {
   document.addEventListener("keydown", onEsc, true);
 
   /* ---------- 首次渲染 ---------- */
+  syncSave();
   renderPresets();
   renderViews();
   renderOwned();
