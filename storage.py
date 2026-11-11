@@ -124,6 +124,10 @@ def _migrate(data: dict) -> dict:
         card.setdefault("detail", "")      # 详细设定：人设资料，默认不送
         card.setdefault("descOn", True)    # 这张卡是否参与设定注入
         card.setdefault("coverSource", "")  # 底稿来源：upload / ai
+        # 「我亲自来」：用户按视图覆写的补图提示词。
+        # 键是视图 key（face/front/.../sheet），值是完整提示词。
+        # 有值就用它替代自动拼装的那段，删掉则回到默认。
+        card.setdefault("viewPrompts", {})
 
     # 工作台里已被删掉的卡要清掉
     valid_ids = {c.get("id") for c in out["cards"]}
@@ -239,6 +243,63 @@ def drop_card_assets(card_id: str) -> None:
             pass
 
 
+def _referenced_rels(card: dict) -> set[str]:
+    """卡片里所有被引用到的资源（main / thumb / 每张 extra 的 file + thumb）。"""
+    refs = {card.get("main"), card.get("thumb")}
+    for e in card.get("extras") or []:
+        refs.add(e.get("file"))
+        refs.add(e.get("thumb"))
+    return {r for r in refs if r}
+
+
+def card_orphans(card_id: str) -> list[str]:
+    """列出这张卡目录下、但已不被库引用的文件（冗余生成图 / 替换残留）。"""
+    card = next((c for c in load_library().get("cards", []) if c.get("id") == card_id), None)
+    if not card:
+        return []
+    folder = ASSETS / card_id
+    if not folder.is_dir():
+        return []
+    kept = set()
+    for rel in _referenced_rels(card):
+        p = abs_asset(rel)
+        if p:
+            kept.add(p.resolve())
+    orphans = []
+    for f in folder.iterdir():
+        if f.is_file() and f.resolve() not in kept:
+            orphans.append(f"{card_id}/{f.name}")
+    return sorted(orphans)
+
+
+def prune_card_orphans(card_id: str) -> int:
+    """删掉卡目录下不被引用的文件，返回删掉的个数。
+
+    只碰「本卡目录内、且不在引用表里」的文件 —— 引用表外的任何文件
+    （包括用户随手放进去的）都视为冗余生成物，因为插件自己只会往这里
+    写 main/thumb/e_*/th_*。谨慎起见不递归、不碰子目录。
+    """
+    folder = ASSETS / card_id
+    if not folder.is_dir():
+        return 0
+    card = next((c for c in load_library().get("cards", []) if c.get("id") == card_id), None)
+    kept = set()
+    if card:
+        for rel in _referenced_rels(card):
+            p = abs_asset(rel)
+            if p:
+                kept.add(p.resolve())
+    n = 0
+    for f in folder.iterdir():
+        if f.is_file() and f.resolve() not in kept:
+            try:
+                f.unlink()
+                n += 1
+            except Exception:
+                pass
+    return n
+
+
 # --------------------------------------------------------------------------
 # 卡片操作
 # --------------------------------------------------------------------------
@@ -272,7 +333,7 @@ def create_card(payload: dict) -> dict:
 def update_card(card_id: str, fields: dict) -> dict | None:
     allowed = {
         "name", "kind", "categoryId", "note", "main", "thumb", "extras", "tags", "color",
-        "identity", "variable", "detail", "descOn", "coverSource",
+        "identity", "variable", "detail", "descOn", "coverSource", "viewPrompts",
     }
 
     def _do(lib):

@@ -502,6 +502,80 @@ async def supplement_cancel(request):
     return ok({"cancelled": done})
 
 
+@routes.post(f"{PREFIX}/supplement/prompt-preview")
+async def supplement_prompt_preview(request):
+    """返回某张卡某个视图的「默认提示词 + 当前生效提示词」。
+
+    给「我亲自来」弹窗用：用户要看到原始提示词才能改，改完要能还原。
+    default 是自动拼装的结果（不含用户覆写），current 是含覆写后的实际值。
+    """
+    body = await _body(request)
+    card_id = body.get("cardId")
+    view = body.get("view") or ""
+    preset_id = body.get("presetId") or ""
+    if not card_id or not view or not preset_id:
+        return fail("缺 cardId / view / presetId")
+
+    try:
+        from . import presets as P
+        from . import sheet_templates as ST
+    except ImportError:
+        import presets as P  # type: ignore
+        import sheet_templates as ST  # type: ignore
+
+    preset = P.get_preset(preset_id)
+    if not preset:
+        return fail(f"未知预设：{preset_id}", 404)
+
+    card = next((c for c in storage.load_library().get("cards", [])
+                 if c.get("id") == card_id), None)
+    if not card:
+        return fail("卡片不存在", 404)
+
+    identity = body.get("identity") or card.get("identity") or ""
+    extra = body.get("extra") or ""
+    name = card.get("name") or ""
+    variant = body.get("variant") or ""
+
+    mode = preset.get("mode", "set")
+    if mode == "sheet":
+        default_prompt = ST.build_sheet_prompt(
+            preset_id, identity=identity, extra=extra, name=name, variant=variant)
+    else:
+        default_prompt = P.compose_edit_prompt(identity, view, extra)
+
+    overrides = card.get("viewPrompts") or {}
+    current = (overrides.get(view) if isinstance(overrides, dict) else "") or default_prompt
+
+    return ok({
+        "view": view,
+        "presetId": preset_id,
+        "default": default_prompt,
+        "current": current,
+        "overridden": bool(overrides.get(view)) if isinstance(overrides, dict) else False,
+    })
+
+
+@routes.post(f"{PREFIX}/card/orphans")
+async def card_orphans(request):
+    """列出这张卡目录下不被引用的冗余文件（替换残留 / 多余生成图）。"""
+    body = await _body(request)
+    cid = body.get("id")
+    if not cid:
+        return fail("缺 id")
+    return ok({"orphans": storage.card_orphans(cid)})
+
+
+@routes.post(f"{PREFIX}/card/prune")
+async def card_prune(request):
+    """删掉这张卡目录下不被引用的冗余文件。"""
+    body = await _body(request)
+    cid = body.get("id")
+    if not cid:
+        return fail("缺 id")
+    return ok({"removed": storage.prune_card_orphans(cid)})
+
+
 # --------------------------------------------------------------------------
 # 底稿生成（新建角色时「让 AI 画一张」）
 # --------------------------------------------------------------------------

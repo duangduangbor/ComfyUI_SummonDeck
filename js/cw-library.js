@@ -1294,6 +1294,35 @@ class LibraryPanel {
                 openSupplement(card.id);
               },
             }),
+            el("button", {
+              class: "cw-btn-mini cw-danger",
+              text: "清理冗余图",
+              title: "删掉这张卡目录里已不被引用的图片（替换残留 / 多余生成图），不影响正在使用的图",
+              onclick: async () => {
+                let orphans;
+                try {
+                  orphans = await cwApi.cardOrphans(card.id);
+                } catch (e) {
+                  return toast("读取冗余图失败：" + e.message);
+                }
+                if (!orphans.length) {
+                  return toast("没有多余的图，目录是干净的");
+                }
+                const ok = await askConfirm({
+                  title: "清理冗余图",
+                  message: `找到 ${orphans.length} 张已不被引用的图，删掉不影响卡片使用。确认清理？`,
+                  confirm: "清理",
+                  danger: true,
+                });
+                if (!ok) return;
+                try {
+                  const r = await cwApi.cardPrune(card.id);
+                  toast(`已清理 ${r.removed} 张冗余图`);
+                } catch (e) {
+                  toast("清理失败：" + e.message);
+                }
+              },
+            }),
           ]),
           el("div", { class: "cw-extras" }, [...extraNodes, addExtra]),
         ]),

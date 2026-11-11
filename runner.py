@@ -315,6 +315,28 @@ def _absorb_result(card_id: str, item: dict, preset_id: str,
     return new_extra
 
 
+def _cleanup_output(src_rel: str) -> None:
+    """删除 output 里本插件写出的中间图（入库成功后调用）。
+
+    只删 ``cw/`` 前缀下的文件 —— 那是我们自己在 workflow 里设的
+    ``filename_prefix``。不碰别的目录，避免误删用户自己的出图。
+    """
+    if not src_rel:
+        return
+    rel = str(src_rel).replace("\\", "/")
+    # 路径必须落在 output/cw/ 下才动
+    if not (rel.startswith("cw/") or rel == "cw"):
+        return
+    try:
+        target = (_output_dir() / rel).resolve()
+        root = _output_dir().resolve()
+        target.relative_to(root)  # 越界抛异常，等于拒绝
+        if target.is_file():
+            target.unlink()
+    except Exception:
+        pass
+
+
 # --------------------------------------------------------------------------
 # 组工作流
 # --------------------------------------------------------------------------
@@ -348,6 +370,15 @@ def _build_workflow(preset: dict, ui: dict, models: dict, *,
 def _prompt_for(preset: dict, job: dict, item: dict) -> str:
     opts = job.get("options") or {}
     mode = preset.get("mode", "set")
+
+    # 「我亲自来」：这张卡针对这个视图写死了提示词，就整段用它，
+    # 跳过自动拼装。写在最前，任何模式（set/sheet）都吃这套覆写。
+    if mode != "t2i":
+        card = _card(job.get("cardId", ""))
+        vp = (card or {}).get("viewPrompts") or {}
+        key = item.get("key") or ""
+        if isinstance(vp, dict) and vp.get(key):
+            return str(vp[key])
 
     if mode == "t2i":
         return P.compose_cover_prompt(opts.get("subject") or opts.get("identity") or "")
@@ -609,6 +640,10 @@ async def _run_job(job: dict) -> None:
                     continue
                 item["file"] = got["file"]
                 item["thumb"] = got["thumb"]
+                # 入库成功 = 源图已复制进卡片 assets，output/cw 里的中间图
+                # 没用了，删掉免得 output 目录越堆越大。
+                # 谨慎起见在入库确认后才删，且只删本插件自己写的 cw/ 前缀。
+                await asyncio.to_thread(_cleanup_output, item.get("_out") or "")
 
             item["status"] = "done"
             item["stage"] = "done"

@@ -76,6 +76,140 @@ function mount(mask) {
 }
 
 /* -------------------------------------------------------------------------
+   「我亲自来」：改这个视图的提示词
+   ------------------------------------------------------------------------- */
+
+/**
+ * 弹一个输入框，展示当前视图的原始提示词，用户改了可保存成自己的、
+ * 也能一键还原默认。保存 = 写进卡片 viewPrompts[view]。
+ *
+ * @param {object} ctx  { cardId, card, presetId, view, viewLabel, getIdentity, getExtra }
+ * @returns {Promise<boolean>} 是否保存过（供调用方刷新界面）
+ */
+async function openPromptEditor(ctx) {
+  const { cardId, card, presetId, view, viewLabel, getIdentity, getExtra } = ctx;
+
+  // 先拿到「默认提示词」和「当前生效值」，加载中先给个占位
+  let defaultPrompt = "";
+  let currentPrompt = "";
+  let overridden = false;
+  try {
+    const r = await cwApi.supplementPromptPreview({
+      cardId,
+      presetId,
+      view,
+      identity: getIdentity ? getIdentity() : card.identity || "",
+      extra: getExtra ? getExtra() : "",
+      name: card.name || "",
+    });
+    defaultPrompt = r.default || "";
+    currentPrompt = r.current || defaultPrompt;
+    overridden = !!r.overridden;
+  } catch (e) {
+    toast("读不到原始提示词：" + e.message);
+    return false;
+  }
+
+  return new Promise((resolve) => {
+    const ta = el("textarea", {
+      class: "cw-textarea cw-sup-prompt-ta",
+      rows: "10",
+      spellcheck: "false",
+    });
+    ta.value = currentPrompt;
+
+    // 保存状态小字：让用户知道这段存到哪、改没改过
+    const state = el("div", { class: "cw-hint" });
+    const setState = (txt) => (state.textContent = txt);
+
+    const mask = el("div", {
+      class: "cw-sup-mask" + (isDarkTheme() ? " cw-dark" : ""),
+    });
+    const close = () => {
+      // 卸载时把可能挂着的 Esc 解绑
+      document.removeEventListener("keydown", onEsc, true);
+      mask.remove();
+    };
+    const finish = (v) => {
+      document.removeEventListener("keydown", onEsc, true);
+      mask.remove();
+      resolve(v);
+    };
+
+    const panel = el("div", { class: "cw-sup-panel cw-sup-prompt-panel" }, [
+      el("div", { class: "cw-sup-head" }, [
+        el("div", {}, [
+          el("b", { text: "我亲自来" }),
+          el("span", { class: "cw-sup-sub", text: `${card.name || ""} · ${viewLabel}` }),
+        ]),
+        el("button", { class: "cw-iconbtn", text: "✕", onclick: () => finish(false) }),
+      ]),
+      el("div", { class: "cw-sup-body" }, [
+        el("div", {
+          class: "cw-hint",
+          text: "下面是这个角度实际发给模型的提示词。直接改，保存后就会用你写的版本出图。",
+        }),
+        ta,
+        state,
+      ]),
+      el("div", { class: "cw-sup-foot" }, [
+        el("div", { class: "cw-sup-foot-actions" }, [
+          el("button", {
+            class: "cw-btn-lg cw-sup-restore",
+            text: "还原默认",
+            title: "丢弃我的改动，回到系统拼装的那段原始提示词",
+            onclick: () => {
+              ta.value = defaultPrompt;
+              setState("已还原为默认提示词，点「保存」生效。");
+            },
+          }),
+          el("button", { class: "cw-btn-lg", text: "取消", onclick: () => finish(false) }),
+          el("button", {
+            class: "cw-btn-lg cw-primary",
+            text: "保存提示词",
+            onclick: async () => {
+              const val = ta.value.trim();
+              if (!val) return toast("提示词不能为空");
+              const vp = { ...(card.viewPrompts || {}) };
+              if (val === defaultPrompt) {
+                // 跟默认一样就等同于「不覆写」，删掉这条覆写更干净
+                delete vp[view];
+              } else {
+                vp[view] = val;
+              }
+              try {
+                await cwApi.updateCard(cardId, { viewPrompts: vp });
+                card.viewPrompts = vp;
+                toast("提示词已保存，下次这个角度会用你写的版本");
+                finish(true);
+              } catch (e) {
+                toast("保存失败：" + e.message);
+              }
+            },
+          }),
+        ]),
+      ]),
+    ]);
+    mask.append(panel);
+    (document.querySelector(".cw-shell") || document.body).append(mask);
+
+    function onEsc(e) {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      finish(false);
+    }
+    document.addEventListener("keydown", onEsc, true);
+
+    setState(
+      overridden
+        ? "这个角度已经用你自己写的提示词了。点「还原默认」可回到原始版本。"
+        : "当前是系统拼装的原始提示词。改完点「保存提示词」才会生效。"
+    );
+    requestAnimationFrame(() => ta.focus());
+  });
+}
+
+/* -------------------------------------------------------------------------
    主流程
    ------------------------------------------------------------------------- */
 
@@ -492,8 +626,29 @@ export async function openSupplement(cardId) {
         },
       });
 
-      // 悬停浮出来的两个入口 —— 用户要的是"就补这张"，而不是先勾选再批量
+      // 悬停浮出来的三个入口 —— 用户要的是"就补这张"，而不是先勾选再批量
       const acts = el("div", { class: "cw-sup-vacts" }, [
+        el("button", {
+          class: "cw-sup-vact is-mine",
+          type: "button",
+          text: "我亲自来",
+          title: "查看并修改这个角度的原始提示词，保存成你自己的版本",
+          onclick: async (e) => {
+            e.stopPropagation();
+            const p = curPreset();
+            if (!p) return toast("先选一套做法");
+            const saved = await openPromptEditor({
+              cardId,
+              card,
+              presetId: p.id,
+              view: v,
+              viewLabel: info.label,
+              getIdentity: () => identInput.value.trim(),
+              getExtra: () => st.extra,
+            });
+            if (saved) toast("提示词已更新，下次补这个角度会用你的版本");
+          },
+        }),
         el("button", {
           class: "cw-sup-vact is-ai",
           type: "button",

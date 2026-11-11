@@ -74,6 +74,9 @@ export const cwApi = {
   supplementActive: (cardId) => req(`/supplement/active?cardId=${encodeURIComponent(cardId)}`),
   supplementRerun: (body) => req("/supplement/rerun", json(body)),
   supplementCancel: (id) => req("/supplement/cancel", json({ id })),
+  supplementPromptPreview: (body) => req("/supplement/prompt-preview", json(body)),
+  cardOrphans: (id) => req("/card/orphans", json({ id })),
+  cardPrune: (id) => req("/card/prune", json({ id })),
 
   // ---- 底稿生成 ----
   coverGenerate: (body) => req("/cover/generate", json(body)),

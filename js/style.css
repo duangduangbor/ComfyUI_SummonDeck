@@ -1977,6 +1977,34 @@
   filter: brightness(1.1);
 }
 
+/* 「我亲自来」：次级强调，不和 AI 主操作抢颜色 */
+.cw-sup-vact.is-mine {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.cw-sup-vact.is-mine:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 提示词编辑弹窗里的长输入框：等宽、可读、够高 */
+.cw-sup-prompt-panel {
+  width: min(680px, 92vw);
+}
+
+.cw-sup-prompt-ta {
+  width: 100%;
+  min-height: 240px;
+  resize: vertical;
+  font-family: "SFMono-Regular", "Consolas", "Menlo", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.cw-sup-restore {
+  margin-right: auto;
+}
+
 .cw-sup-vcap {
   padding: 7px 9px 8px;
 }
