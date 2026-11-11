@@ -27,9 +27,21 @@
 
 ## 装
 
-已经放好了。目录：`ComfyUI/custom_nodes/ComfyUI_SummonDeck/`
+放进 ComfyUI 的 `custom_nodes` 目录，**目录名必须是 `ComfyUI_SummonDeck`**（前端按这个名字取 `style.css`，改名就白屏）。
 
-重启 ComfyUI 即可。搜索节点 **🎴 怪兽牌组 · SummonDeck**（分类：`怪兽牌组`）。
+```bash
+cd ComfyUI/custom_nodes
+git clone https://github.com/duangduangbor/ComfyUI_SummonDeck.git
+```
+
+不使用 git 的话，从 [Releases](https://github.com/duangduangbor/ComfyUI_SummonDeck/releases) 下压缩包，解压后把 `ComfyUI_SummonDeck` 文件夹整个放进去。
+
+重启 ComfyUI，画布空白处双击搜索 **🎴 怪兽牌组 · SummonDeck**（分类：`怪兽牌组`）。
+
+无第三方依赖，只用 ComfyUI 自带的 torch / numpy / aiohttp。
+
+> 旧的 `ComfyUI_CharacterWorkbench` 目录要先删掉，否则节点会注册两份。
+> 节点类型名仍是 `CharacterWorkbench`（故意没改），所以以前存的工作流照常打开，不会变红。
 
 ---
 
