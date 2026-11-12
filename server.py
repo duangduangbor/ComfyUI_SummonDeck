@@ -218,6 +218,20 @@ async def upload(request):
     card_id = (form.get("cardId") or "").strip()
     slot = (form.get("slot") or "main").strip()
     name = (form.get("name") or "").strip()
+
+    # 快速参考图：不建卡、不写库，只在 _quick/ 留一个文件。
+    # 「用完即扔」的语义要求它和角色卡彻底分离 —— 关掉不看就是垃圾，删了不心疼。
+    if slot == "quick":
+        folder = storage.quick_dir()
+        ext = storage.safe_ext(field.filename or "")
+        fpath = folder / f"{uuid.uuid4().hex[:12]}{ext}"
+        try:
+            fpath.write_bytes(raw)
+        except Exception as exc:
+            return fail(f"临时图写不进去：{exc}")
+        storage.prune_quick()
+        rel = f"{storage.QUICK_SUBDIR}/{fpath.name}"
+        return ok({"file": rel, "url": f"{PREFIX}/asset?path={rel}"})
     # 手动补图会带上这三样：补的是哪个角度、显示什么名字、从哪来的。
     # 不带也能用（老调用方不传），只是没角度标签。
     view = (form.get("view") or "").strip()
@@ -295,6 +309,22 @@ async def upload(request):
         card = storage.update_card(card_id, {"main": rel_file, "thumb": rel_thumb})
 
     return ok({"card": card, "created": created, "url": f"{PREFIX}/asset?path={rel_file}"})
+
+
+@routes.post(f"{PREFIX}/quick/ref/delete")
+async def quick_ref_delete(request):
+    """移除一个临时参考图槽时顺手把文件也删了。真删不掉也不影响用。"""
+    body = await _body(request)
+    rel = (body.get("file") or "").strip()
+    if not rel.startswith(f"{storage.QUICK_SUBDIR}/"):
+        return fail("只能删临时参考图", 400)
+    path = storage.abs_asset(rel)
+    if path:
+        try:
+            path.unlink()
+        except Exception as exc:
+            return fail(str(exc))
+    return ok({"deleted": True})
 
 
 @routes.post(f"{PREFIX}/extra/delete")
@@ -499,6 +529,22 @@ async def supplement_cancel(request):
     except ImportError:
         import runner  # type: ignore
     done = await runner.cancel_job(body.get("id") or "")
+    return ok({"cancelled": done})
+
+
+@routes.post(f"{PREFIX}/supplement/cancel-item")
+async def supplement_cancel_item(request):
+    """取消任务里的某一个视图（不生成这一格），其余照常跑。"""
+    body = await _body(request)
+    jid = body.get("id") or ""
+    key = body.get("key") or ""
+    if not jid or not key:
+        return fail("缺 id / key")
+    try:
+        from . import runner
+    except ImportError:
+        import runner  # type: ignore
+    done = await runner.cancel_item(jid, key)
     return ok({"cancelled": done})
 
 

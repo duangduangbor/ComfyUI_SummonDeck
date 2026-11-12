@@ -159,7 +159,7 @@ async def _wait_prompt(prompt_id: str, job: dict, item: dict, timeout: float = 9
 
     async with aiohttp.ClientSession() as session:
         while True:
-            if job.get("cancelled"):
+            if job.get("cancelled") or item.get("_skip"):
                 # 用普通异常而不是 CancelledError：后者会让 asyncio
                 # 认为整个 task 被取消，收尾逻辑就不执行了
                 raise RuntimeError("__cancelled__")
@@ -603,6 +603,11 @@ async def _run_job(job: dict) -> None:
         if job.get("cancelled"):
             item["status"] = "cancelled"
             continue
+        if item.get("_skip"):
+            # 单个视图被取消：跳过这一格，不标记整个任务失败
+            item["status"] = "cancelled"
+            item["stage"] = "cancelled"
+            continue
 
         item["status"] = "running"
         item["stage"] = "building"
@@ -649,9 +654,10 @@ async def _run_job(job: dict) -> None:
             item["stage"] = "done"
 
         except Exception as e:
-            if job.get("cancelled"):
+            if job.get("cancelled") or item.get("_skip"):
                 item["status"] = "cancelled"
                 item["stage"] = "cancelled"
+                item["error"] = ""
             else:
                 item["status"] = "failed"
                 item["stage"] = "failed"
@@ -661,6 +667,9 @@ async def _run_job(job: dict) -> None:
         job["status"] = "cancelled"
     elif all(i["status"] == "done" for i in job["items"]):
         job["status"] = "done"
+    elif all(i["status"] in ("done", "cancelled") for i in job["items"]):
+        # 有的完成有的被取消：算 partial，前端好提示「部分完成/部分已跳过」
+        job["status"] = "partial" if any(i["status"] == "done" for i in job["items"]) else "cancelled"
     elif any(i["status"] == "done" for i in job["items"]):
         job["status"] = "partial"
     else:
@@ -827,6 +836,57 @@ async def cancel_job(job_id: str) -> bool:
                 pass
     except Exception:
         pass
+    return True
+
+
+async def cancel_item(job_id: str, item_key: str) -> bool:
+    """取消任务里的某一个视图（不生成这一格），其余照常跑。
+
+    - 还在排队（queued）的：直接标记跳过，`_run_job` 循环到它会 continue。
+    - 正在采样（running）的：标记跳过 + 调 ComfyUI /interrupt 中断当前采样，
+      `_wait_prompt` 会因 `item._skip` 抛 __cancelled__，随后循环继续下一格。
+    """
+    job = JOBS.get(job_id)
+    if not job:
+        return False
+    item = next((i for i in job["items"] if i["key"] == item_key), None)
+    if not item:
+        return False
+    if item.get("status") in ("done", "failed", "cancelled"):
+        return True
+
+    item["_skip"] = True
+    item["status"] = "cancelled"
+    item["stage"] = "cancelled"
+    item["error"] = ""
+
+    # 正在采样中的那一格，要去 ComfyUI 那边打断，否则它会继续占着显存跑完
+    pid = item.get("promptId")
+    if pid and item.get("status") == "cancelled":
+        import aiohttp
+
+        port = getattr(_server(), "port", 8188)
+        base = f"http://127.0.0.1:{port}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                # 先看它是不是正在跑（running），是才 interrupt；排队中就 delete 掉
+                try:
+                    async with session.get(f"{base}/queue",
+                                           timeout=aiohttp.ClientTimeout(total=5)) as r:
+                        q = await r.json()
+                except Exception:
+                    q = {}
+                running = q.get("queue_running") or []
+                pending = q.get("queue_pending") or []
+                is_running = any(len(x) > 1 and x[1] == pid for x in running)
+                if is_running:
+                    await session.post(f"{base}/interrupt", json={},
+                                       timeout=aiohttp.ClientTimeout(total=8))
+                elif any(len(x) > 1 and x[1] == pid for x in pending):
+                    await session.post(f"{base}/queue", json={"delete": [pid]},
+                                       timeout=aiohttp.ClientTimeout(total=8))
+        except Exception:
+            pass
     return True
 
 

@@ -242,7 +242,10 @@ export async function openSupplement(cardId) {
   /* ---------- 状态 ---------- */
   const st = {
     presetId: (presets.presets.find((p) => p.available) || {}).id || "",
-    views: new Set(),
+    // 补图队列：按点击顺序排列，逐个加入。底部「一起补」跑的就是这个队列。
+    queue: [],
+    // 首次进入时默认把全部视图排进队列；之后清空就是真清空，不再自动填满
+    queueInitialized: false,
     identity: card.identity || "",
     extra: "",
     job: null,
@@ -359,7 +362,29 @@ export async function openSupplement(cardId) {
     ownedBox,
   ]);
 
-  const startBtn = el("button", { class: "cw-btn-lg cw-primary", text: "开始补图" });
+  const startBtn = el("button", { class: "cw-btn-lg cw-primary", text: "一起补" });
+  // 清空补图队列：把加进来的视图全部移出，回到「没选任何角度」的状态
+  const clearQueueBtn = el("button", {
+    class: "cw-btn-lg cw-sup-clear",
+    type: "button",
+    text: "清空",
+    title: "把补图队列清空，重新挑选要补的角度",
+    onclick: () => {
+      st.queue = [];
+      renderViews();
+      syncQueueButtons();
+      statusLine.textContent = "补图队列已清空，点视图卡重新挑选";
+    },
+  });
+
+  // 队列变化时同步底部按钮：主按钮显示个数，清空按钮在有队列时才出现
+  const syncQueueButtons = () => {
+    const n = st.queue.length;
+    if (st.running) return; // 跑图时按钮交给 watch/取消逻辑管
+    startBtn.textContent = n > 0 ? `一起补 ${n} 个` : "一起补";
+    startBtn.disabled = n === 0;
+    clearQueueBtn.style.display = n > 0 ? "" : "none";
+  };
 
   // 补出来的图出完就已经写进卡里了，唯一会丢的是这段身份描述 ——
   // 以前它只在「开始补图」时随任务带出去，手打完直接关面板就白写了。
@@ -371,6 +396,7 @@ export async function openSupplement(cardId) {
   });
 
   const statusLine = el("div", { class: "cw-sup-status" });
+
   const closeBtn = el("button", { class: "cw-iconbtn", text: "✕" });
   const wfBtn = el("button", {
     class: "cw-btn-mini cw-sup-wfbtn",
@@ -417,7 +443,7 @@ export async function openSupplement(cardId) {
     bodyEl,
     el("div", { class: "cw-sup-foot" }, [
       statusLine,
-      el("div", { class: "cw-sup-foot-actions" }, [saveBtn, startBtn]),
+      el("div", { class: "cw-sup-foot-actions" }, [saveBtn, clearQueueBtn, startBtn]),
     ]),
   ]);
 
@@ -446,9 +472,11 @@ export async function openSupplement(cardId) {
         onclick: () => {
           if (!p.available) return;
           st.presetId = p.id;
-          st.views = new Set();
+          st.queue = [];
+          st.queueInitialized = false; // 切预设后重新默认全选新预设的视图
           renderPresets();
           renderViews();
+          syncQueueButtons();
         },
       }, [
         el("div", { class: "cw-sup-preset-top" }, [
@@ -468,9 +496,11 @@ export async function openSupplement(cardId) {
   /* ---------- 渲染：视图 ---------- */
 
   const toggleView = (v) => {
-    if (st.views.has(v)) st.views.delete(v);
-    else st.views.add(v);
+    const i = st.queue.indexOf(v);
+    if (i >= 0) st.queue.splice(i, 1);
+    else st.queue.push(v);
     renderViews();
+    syncQueueButtons();
   };
 
   /**
@@ -581,10 +611,15 @@ export async function openSupplement(cardId) {
     }
 
     viewWrap.style.display = "";
-    if (!st.views.size) (p.views || []).forEach((v) => st.views.add(v));
+    // 首次进入默认全部排进队列；此后清空就是清空，不自动回填
+    if (!st.queueInitialized) {
+      st.queue = [...(p.views || [])];
+      st.queueInitialized = true;
+    }
 
     for (const v of p.views || []) {
-      const on = st.views.has(v);
+      const qi = st.queue.indexOf(v);
+      const on = qi >= 0;
       const info = viewInfoOf(v);
       const mine = st.extras.filter((e) => e.view === v);
       // 这个角度自己已经有图就显示它；没有就拿卡片底稿当底，
@@ -601,7 +636,7 @@ export async function openSupplement(cardId) {
           draggable: "false",
           title: "点开看大图（← → 可在这排视图之间切换）",
         });
-        // 点图看大图；点卡的其他地方才是勾选，两者不能混
+        // 点图看大图；点卡的其他地方才是加入/移出补图队列，两者不能混
         pic.addEventListener("click", (e) => {
           e.stopPropagation();
           openIn(viewGallery(), v);
@@ -614,12 +649,14 @@ export async function openSupplement(cardId) {
         thumb.append(el("div", { class: "cw-sup-vnone", text: "未补" }));
       }
 
-      // 左上角勾选：只决定「开始补图」这批跑不跑这一格，不是主操作
+      // 左上角序号圈：加入补图队列后显示它在队列里的顺序（1、2、3…）
       const mark = el("button", {
         class: "cw-sup-vmark" + (on ? " is-on" : ""),
         type: "button",
-        text: on ? "✓" : "",
-        title: on ? "这一格交给 AI 出图（点一下跳过）" : "这一格跳过（点一下让 AI 出）",
+        text: on ? String(qi + 1) : "",
+        title: on
+          ? `已在补图队列（第 ${qi + 1} 个），点一下移出`
+          : "点一下加入补图队列",
         onclick: (e) => {
           e.stopPropagation();
           toggleView(v);
@@ -690,7 +727,7 @@ export async function openSupplement(cardId) {
         class: "cw-sup-vcard" + (on ? " is-on" : "") + (mine.length ? " is-owned" : ""),
       }, [thumb, cap]);
 
-      // 点卡内空白 = 切换勾选；按钮各自 stopPropagation，不会一次点两下
+      // 点卡内空白 = 加入/移出补图队列；按钮各自 stopPropagation，不会一次点两下
       cardEl.addEventListener("click", (e) => {
         if (e.target.closest("button")) return;
         toggleView(v);
@@ -700,8 +737,8 @@ export async function openSupplement(cardId) {
     }
 
     viewHint.textContent =
-      "鼠标移到任意一格上，会浮出「AI 补这张」和「手动上传」—— " +
-      "只补一个角度不用勾选，点它就行。底部的「开始补图」跑的是所有打了 ✓ 的格子。" +
+      "点一下视图卡（或左上角序号圈）就把它加入补图队列，再点别的继续加，按点的顺序排队。" +
+      "左上角数字是它在队列里的顺序，点一下移出。底部的「一起补」跑的就是整个队列。" +
       "点图片本身可以放大看细节（← → 在这排视图间切换）。";
     identHint.textContent =
       "每个视图都是「把底稿改成那个角度」，身份由参考图锚定。这里填的是补丁：" +
@@ -835,6 +872,24 @@ export async function openSupplement(cardId) {
           sub: i.seed ? `seed ${i.seed}` : "",
         }));
 
+    // 正在跑的那一格，顶部给一条醒目的「正在生成」横幅 —— 用户一眼知道现在在画哪个角度
+    if (job.status !== "done" && job.status !== "failed" && job.status !== "cancelled") {
+      const running = job.items.find((i) => i.status === "running");
+      const cur = running || job.items.find((i) => i.status === "queued");
+      if (cur) {
+        const label = cur.label || cur.key;
+        const stageTxt = running
+          ? (running.stage === "sampling" ? "采样中" : running.stage === "submitting" ? "提交中" : "准备中")
+          : "排队中";
+        resultBox.append(
+          el("div", { class: "cw-sup-live" }, [
+            el("span", { class: "cw-sup-live-dot" }),
+            el("span", { class: "cw-sup-live-text", text: `正在生成「${label}」· ${stageTxt}` }),
+          ])
+        );
+      }
+    }
+
     for (const it of job.items) {
       const thumb = it.thumb || it.file;
       const row = el("div", { class: "cw-sup-item" });
@@ -850,6 +905,32 @@ export async function openSupplement(cardId) {
         pic.append(el("span", { class: "cw-sup-item-ph", text: it.status === "running" ? "…" : "·" }));
       }
 
+      // 还没出图的格子（采样中/排队中/待开始）右上角都给红叉，点一下取消这一格，其余照常跑
+      const cancellable = it.status === "running" || it.status === "queued" || it.status === "pending";
+      if (cancellable) {
+        pic.append(
+          el("button", {
+            class: "cw-sup-item-x",
+            type: "button",
+            text: "✕",
+            title: it.status === "running" ? "取消生成这一格，其余照常跑" : "从队列里撤掉这一格",
+            onclick: async (e) => {
+              e.stopPropagation();
+              try {
+                await cwApi.supplementCancelItem(job.id, it.key);
+                toast(`已取消「${it.label || it.key}」，其余照常跑`);
+                // 乐观更新：先在本地把这一格标成已取消并重绘，别等下次轮询
+                it.status = "cancelled";
+                it.stage = "cancelled";
+                renderJob({ ...job });
+              } catch (err) {
+                toast("取消失败：" + err.message);
+              }
+            },
+          })
+        );
+      }
+
       const meta = el("div", { class: "cw-sup-item-meta" }, [
         el("div", { class: "cw-sup-item-name", text: it.label || it.key }),
         el("div", {
@@ -857,6 +938,7 @@ export async function openSupplement(cardId) {
           text:
             it.status === "done" ? `seed ${it.seed}`
             : it.status === "failed" ? (it.error || "失败")
+            : it.status === "cancelled" ? "已取消"
             : it.status === "running" ? (it.stage === "sampling" ? "采样中" : "准备中")
             : it.status === "queued" ? "排队中"
             : "待开始",
@@ -899,10 +981,10 @@ export async function openSupplement(cardId) {
 
     const settle = (msg) => {
       statusLine.textContent = msg;
-      startBtn.textContent = "开始补图";
-      startBtn.classList.add("cw-primary");
-      startBtn.disabled = false;
       st.running = false;
+      // 收尾后把主按钮还给「一起补」，清空按钮按当前队列显隐
+      syncQueueButtons();
+      startBtn.classList.add("cw-primary");
     };
 
     if (job.status === "done") {
@@ -939,6 +1021,7 @@ export async function openSupplement(cardId) {
     startBtn.textContent = "取消";
     startBtn.classList.remove("cw-primary");
     startBtn.disabled = false;
+    clearQueueBtn.style.display = "none"; // 跑图时不让清队列，免得和取消混淆
     renderJob(job);
 
     const tick = async () => {
@@ -948,7 +1031,7 @@ export async function openSupplement(cardId) {
         if (["done", "failed", "partial", "cancelled"].includes(s.status)) {
           st.running = false;
           startBtn.disabled = false;
-          // 新图已经入卡，把「已补过的图」和视图上的 ✓ 同步出来
+          // 新图已经入卡，把「已补过的图」和视图上的序号同步出来
           await refreshCard();
           return;
         }
@@ -971,10 +1054,9 @@ export async function openSupplement(cardId) {
       try {
         await cwApi.supplementCancel(st.job.id);
         statusLine.textContent = "已取消";
-        startBtn.textContent = "开始补图";
-        startBtn.classList.add("cw-primary");
-        startBtn.disabled = false;
         st.running = false;
+        syncQueueButtons();
+        startBtn.classList.add("cw-primary");
       } catch (e) {
         toast(e.message);
         startBtn.disabled = false;
@@ -986,6 +1068,10 @@ export async function openSupplement(cardId) {
     if (!p) return toast("先选一套做法");
     if (!p.available) return toast("这套做法当前缺模型");
 
+    if (p.mode === "set" && !st.queue.length) {
+      return toast("先点几个视图加入补图队列");
+    }
+
     st.identity = identInput.value.trim();
     st.running = true;
     st.autoScrolled = false;
@@ -996,7 +1082,7 @@ export async function openSupplement(cardId) {
       const job = await cwApi.supplementRun({
         cardId,
         presetId: p.id,
-        views: p.mode === "sheet" ? [] : [...st.views],
+        views: p.mode === "sheet" ? [] : [...st.queue],
         identity: st.identity,
         extra: st.extra,
         name: card.name || "",
@@ -1007,6 +1093,7 @@ export async function openSupplement(cardId) {
       statusLine.textContent = e.message;
       startBtn.disabled = false;
       st.running = false;
+      syncQueueButtons();
     }
   });
 
@@ -1124,15 +1211,9 @@ export async function openSupplement(cardId) {
   /* ---------- 首次渲染 ---------- */
   syncSave();
   renderPresets();
-  renderViews();
+  renderViews(); // 首次会自动把全部视图排进补图队列
   renderOwned();
-
-  // 第一次进来默认勾满所有视图
-  const p0 = curPreset();
-  if (p0 && p0.mode === "set") {
-    st.views = new Set(p0.views || []);
-    renderViews();
-  }
+  syncQueueButtons();
 
   // 上次没跑完就关掉了？把界面接回去，别让用户以为没在跑、又点一次
   if (active && Array.isArray(active.items) && active.items.length) {

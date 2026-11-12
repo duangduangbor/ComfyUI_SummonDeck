@@ -978,22 +978,115 @@ class LibraryPanel {
         return;
       }
 
+      // 重绘会重建整个抽屉，滚动位置会丢。先把旧 body 的滚动量记下来，重建后还原，
+      // 这样「移除补充图」「清理冗余图」等局部操作不会把页面弹回最上面。
+      const prevBody = this.modal.querySelector(".cw-drawer-body");
+      const prevScrollTop = prevBody ? prevBody.scrollTop : 0;
+
       const drop = el("div", { class: "cw-drop", title: "点击或拖入图片" });
-      if (card.main) {
-        drop.append(
-          el("img", {
-            src: assetUrl(card.main, store.bustOf(card.id)),
-            alt: "",
-          })
-        );
-      } else {
-        drop.append(
-          el("div", { class: "cw-drop-hint" }, [
-            el("b", { text: "放一张主图" }),
-            "点击选择，或直接把图拖进来",
-          ])
-        );
-      }
+      const renderDrop = () => {
+        drop.replaceChildren();
+        if (card.main) {
+          drop.append(
+            el("img", {
+              src: assetUrl(card.main, store.bustOf(card.id)),
+              alt: "",
+            })
+          );
+        } else {
+          drop.append(
+            el("div", { class: "cw-drop-hint" }, [
+              el("b", { text: "放一张封面" }),
+              "点击选择，或直接把图拖进来",
+            ])
+          );
+        }
+      };
+
+      // 封面操作行：常显在封面图下方，一眼就能看到怎么换
+      const coverActions = el("div", { class: "cw-cover-actions" }, [
+        el("button", {
+          class: "cw-btn-mini",
+          type: "button",
+          text: "换封面",
+          title: "从本地选一张图，框选后替换封面",
+          onclick: () => chooseCover(),
+        }),
+        el("button", {
+          class: "cw-btn-mini",
+          type: "button",
+          text: "AI 重画封面",
+          title: "写一句描述，让 AI 重新画一张封面",
+          onclick: () => aiRecover(),
+        }),
+      ]);
+
+      // 本地换封面：和建卡底稿一样先框选，避免把整张拼图/无关内容塞进去
+      const chooseCover = async () => {
+        const file = await pickFile();
+        if (!file) return;
+        let blob;
+        try {
+          blob = await openCrop(file, { title: "框出新的封面", aspect: 3 / 4 });
+        } catch (e) {
+          return toast(e.message || "这张图读不出来");
+        }
+        if (!blob) return;
+        await uploadTo(new File([blob], "cover.png", { type: blob.type || "image/png" }), "main");
+      };
+
+      // AI 重画封面：弹输入框写描述，走底稿生成通道，结果直接替换 main
+      const aiRecover = async () => {
+        const subject = await askText({
+          title: "AI 重画封面",
+          label: "描述一下想要的新封面",
+          value: card.identity || card.name || "",
+          placeholder: "例：十七岁剑术学徒，黑长直，琥珀色眼睛，米色针织衫配深色长裤",
+          confirm: "开始重画",
+        });
+        if (!subject) return;
+        try {
+          const presets = await cwApi.supplementPresets();
+          const preset = (presets.presets || []).find((p) => p.mode === "t2i" && p.available);
+          if (!preset) {
+            return toast("没有可用的底稿生成模型（缺 Qwen-Image 一类）");
+          }
+          const job = await cwApi.coverGenerate({
+            cardId: card.id,
+            presetId: preset.id,
+            subject,
+            ratio: "portrait",
+          });
+          await waitCoverJob(job.id);
+          store.bust(card.id);
+          await store.refresh();
+          render();
+          this.renderGrid();
+          toast("封面已重画");
+        } catch (e) {
+          toast(`重画失败：${e.message}`);
+        }
+      };
+
+      const waitCoverJob = (jobId) =>
+        new Promise((resolve, reject) => {
+          const tick = async () => {
+            try {
+              const snap = await cwApi.supplementJob(jobId);
+              if (!snap) throw new Error("任务丢了");
+              const item = snap.items?.[0] || {};
+              if (snap.status === "done") return resolve(snap);
+              if (snap.status === "failed" || snap.status === "cancelled") {
+                return reject(new Error(item.error || "生成失败"));
+              }
+            } catch (e) {
+              clearInterval(timer);
+              return reject(e);
+            }
+          };
+          const timer = setInterval(tick, 2500);
+          tick();
+        });
 
       const uploadTo = async (file, slot) => {
         if (!file) return;
@@ -1010,19 +1103,28 @@ class LibraryPanel {
       };
 
       drop.addEventListener("click", async () => {
-        const file = await pickFile();
-        if (file) uploadTo(file, "main");
+        await chooseCover();
       });
       drop.addEventListener("dragover", (e) => {
         e.preventDefault();
         drop.dataset.over = "1";
       });
       drop.addEventListener("dragleave", () => (drop.dataset.over = "0"));
-      drop.addEventListener("drop", (e) => {
+      drop.addEventListener("drop", async (e) => {
         e.preventDefault();
         const file = e.dataTransfer?.files?.[0];
-        if (file) uploadTo(file, "main");
+        if (!file) return;
+        let blob;
+        try {
+          blob = await openCrop(file, { title: "框出新的封面", aspect: 3 / 4 });
+        } catch (err) {
+          return toast(err.message || "这张图读不出来");
+        }
+        if (!blob) return;
+        await uploadTo(new File([blob], "cover.png", { type: blob.type || "image/png" }), "main");
       });
+
+      renderDrop();
 
       const nameInput = el("input", { class: "cw-input", value: card.name || "" });
       nameInput.addEventListener("change", async () => {
@@ -1278,7 +1380,11 @@ class LibraryPanel {
       ]);
 
       const body = el("div", { class: "cw-drawer-body" }, [
-        drop,
+        el("div", { class: "cw-field" }, [
+          el("label", { text: "封面" }),
+          drop,
+          coverActions,
+        ]),
         el("div", { class: "cw-field" }, [el("label", { text: "名字" }), nameInput]),
         el("div", { class: "cw-field" }, [el("label", { text: "分类" }), catSelect]),
         el("div", { class: "cw-field" }, [el("label", { text: "标记色（工作台 / @ 显示颜色）" }), colorRow]),
@@ -1349,6 +1455,11 @@ class LibraryPanel {
       if (old) old.replaceWith(drawer);
       else this.modal.append(drawer);
       this.drawerEl = drawer;
+
+      // 还原滚动位置，别让局部操作把页面弹回顶部
+      if (prevScrollTop > 0) {
+        body.scrollTop = prevScrollTop;
+      }
     };
 
     this._drawerRender = render;

@@ -208,6 +208,52 @@ def card_dir(card_id: str) -> Path:
     return d
 
 
+# 快速参考图：和角色卡平行的另一类素材 —— 从外面拖/粘进来的图，
+# 不进 library.json，用完即扔。下划线前缀保证它不可能和卡 id 撞名。
+QUICK_SUBDIR = "_quick"
+
+
+def quick_dir() -> Path:
+    d = ASSETS / QUICK_SUBDIR
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def prune_quick(max_files: int = 400, max_age_days: int = 30) -> int:
+    """临时图也会堆。按「太老」+「太多」两条线削，绝不碰工作流里刚引用的。"""
+    d = ASSETS / QUICK_SUBDIR
+    if not d.is_dir():
+        return 0
+
+    removed = 0
+    cutoff = time.time() - max_age_days * 86400
+    try:
+        entries = [p for p in d.iterdir() if p.is_file()]
+    except Exception:
+        return 0
+
+    alive = []
+    for p in entries:
+        try:
+            if p.stat().st_mtime < cutoff:
+                p.unlink()
+                removed += 1
+            else:
+                alive.append(p)
+        except Exception:
+            pass
+
+    if len(alive) > max_files:
+        alive.sort(key=lambda p: p.stat().st_mtime)
+        for p in alive[: len(alive) - max_files]:
+            try:
+                p.unlink()
+                removed += 1
+            except Exception:
+                pass
+    return removed
+
+
 def abs_asset(rel: str) -> Path | None:
     """把库里的相对路径解析成绝对路径，越界一律拒绝。"""
     if not rel:

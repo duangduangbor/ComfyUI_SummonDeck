@@ -2,8 +2,8 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | 1.3.1 |
-| 归档日期 | 2026-11-11 |
+| 版本 | 1.5.0 |
+| 归档日期 | 2026-11-12 |
 | 运行环境 | Windows 10 · ComfyUI · Python 3.13 (venv) · RTX 2080 SUPER 8G |
 | 插件目录 | `ComfyUI/custom_nodes/ComfyUI_SummonDeck/` |
 | 数据目录 | `ComfyUI/user/default/character_workbench/`（**与原名一致，故意没改**） |
@@ -60,7 +60,7 @@ AI 出图里最烦的不是画得难看，是**同一个人画两次就变脸**�
 | 文件 | 职责 | 关键点 |
 |---|---|---|
 | `__init__.py` | 注册节点、挂载 HTTP 路由 | `WEB_DIRECTORY = "./js"` |
-| `nodes.py` | 主节点：解析 `@`、拼设定块、组参考图 batch | 输出 5 路（图 / 提示词 / 对照 / 张数 / 原始提示词） |
+| `nodes.py` | 主节点：解析 `@`、拼设定块、组参考图 batch | 输出 11 路：batch / 提示词 / 对照 / 张数 / 原始提示词 + **参考图1..6 单路**（不 pad，给一路吃一张的模型） |
 | `server.py` | 全部 HTTP 接口（卡库、上传、补图、预设） | `PREFIX = "/character_workbench"` |
 | `storage.py` | `library.json` 读写、资源目录、缩略图 | 并发用 `mutate()` 串起来 |
 | `presets.py` | 预设定义、`VIEWS`、`VIEW_GUIDES`、提示词组装、`apply_inject` | 视图文案与喂模型的指令**同源** |
@@ -165,6 +165,13 @@ user/default/character_workbench/
 
 **Esc 监听挂错层会被自己人吃掉。** 补图面板在 `document` 捕获阶段监听 Esc（跑任务时先拦一句）。大图查看器如果也挂 `document`，因为同节点捕获监听按注册顺序执行，后注册的收不到已经 `stopPropagation` 的事件 —— 按 Esc 会把整个面板关掉。挂到更外层的 `window` 捕获阶段才能先吃掉。
 
+**手写工作流 JSON 会被前端重新排序。** 给 H3 的 `ref_image_1` 后面插两个 autogrow 插槽，前端加载时把它们挪到输入列表末尾，于是后面所有 `target_slot` 整体错位 —— 「提示词」那根线会静默消失（`graphToPrompt` 里 `prompt` 变成空串，不报错）。两条规矩：
+1. **autogrow 插槽只能追加在输入数组末尾**，不要插在中间；
+2. **widget 转成的输入（prompt/width 这种）必须显式写 `input.link` 和 `origin.outputs[n].links`**，只靠 links 数组里那条记录，前端不认。
+最省事的做法是别手写：用前端 API `node.connect(...)` 连好后 `app.graph.serialize()` 导出。
+
+**「一路一张」的节点会把 batch 当第一张用。** `MiniMaxH3ReferenceToVideo` 里是 `_resize(img[:1], ...)`，一个 batch 接进 `ref_image_0` 只会用第一张。所以多卡不能靠 batch，必须给单独出口 —— 而且单独出口不能复用 batch 的预处理（batch 要求同尺寸，会补灰边）。
+
 ---
 
 ## 8. 性能基线（本机实测）
@@ -190,6 +197,9 @@ user/default/character_workbench/
 | 1.2 | 补图面板：多视图、角度引导、手动上传走裁切、同角度覆盖、任务接回、删除连带缩略图 |
 | **1.3** | **改名 怪兽牌组 / SummonDeck；视图改缩略图卡 + 悬停「AI 补这张 / 手动上传」；抽屉「＋」也走裁切；裁切比例按钮修原图比例态** |
 | 1.3.1 | 缩略图点开看大图（← → 翻页、1:1 实际像素、Esc 只关大图）；底部「保存」写回身份描述，关面板自动落盘 |
+| 1.3.2 | 修「移除补充图跳回页首」（重建抽屉时保存/恢复 scrollTop） |
+| 1.4.0 | 编辑抽屉封面常显按钮（裁切换图 / AI 重画）；补图面板改「加入队列」+ 一起补 N 个 + 单格红叉取消；结果区实时预览；快速参考图（拖/粘、`@参考N`、用完即扔） |
+| **1.5.0** | **节点多出「参考图1..6」单路输出（原比例、不补灰），直连 H3 ref2va 这类一路吃一张图的模型；节点头部加「引用标记」下拉（`image {n}` / `<Picture {n}>` / `图{n}`），按节点选而不是全局一套** |
 
 ---
 

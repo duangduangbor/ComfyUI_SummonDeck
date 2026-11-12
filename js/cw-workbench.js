@@ -6,11 +6,11 @@
  */
 
 import { app } from "../../scripts/app.js";
-import { store, el, injectStyle, assetUrl, isDarkTheme, toast } from "./cw-core.js";
+import { store, el, injectStyle, assetUrl, isDarkTheme, toast, cwApi } from "./cw-core.js";
 import { openLibrary } from "./cw-library.js";
 
 const NODE_CLASS = "CharacterWorkbench";
-const DEFAULT_SIZE = [452, 470];
+const DEFAULT_SIZE = [470, 664];
 
 /**
  * DOM 组件的「最小高度」必须是一个常量，绝不能反过来读 node.size。
@@ -25,8 +25,11 @@ const DEFAULT_SIZE = [452, 470];
  *
  * 现在改成固定常量：节点高度由用户决定，内容区通过 CSS height:100% 填满宿主，
  * 两者彻底解耦，不管加多少输出口、宽度拉到多窄都不会再长。
+ *
+ * （后来又加了「快速参考图」区，最小高度从 300 提到 440 —— 同样是常量，
+ *   逻辑没变，只是内容底噪变高了。）
  */
-const MIN_CONTENT_HEIGHT = 300;
+const MIN_CONTENT_HEIGHT = 440;
 
 /** 超过这个高度就认为是坏数据，加载时拉回默认尺寸 */
 const MAX_NODE_HEIGHT = 1600;
@@ -36,6 +39,12 @@ const MARK_COLORS = [
   "#d9534f", "#e08b3c", "#c9a227", "#5aa469",
   "#3f8ad4", "#7a6ad4", "#c060a1", "#e2e2e2",
 ];
+
+/** 快速参考图在提示词里的高亮色：和卡的「可自定义标记色」区分开 */
+const QREF_COLOR = "#c0873c";
+
+/** 最多几张：再多就要两行往上，提示词框会被挤没 */
+const QREF_MAX = 6;
 
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -48,6 +57,9 @@ class WorkbenchUI {
     this.node = node;
     this.container = container;
     this.prompt = "";
+    // 快速参考图：从外面拖/粘进来的临时素材。不进卡库，用完即扔。
+    // 结构 { file: "_quick/xxx.png", name: "参考1" }
+    this.quickRefs = [];
     this.suggestIndex = 0;
     this.suggestions = [];
 
@@ -61,6 +73,7 @@ class WorkbenchUI {
       this.ro?.disconnect();
       this.suggestEl.remove();
       this.colorPop?.remove();
+      this.qrefInput?.remove();
     };
   }
 
@@ -86,8 +99,52 @@ class WorkbenchUI {
 
     this.quickEl = el("div", { class: "cw-quick" });
 
+    // ---- 快速参考图 ----
+    // 定位：和「台上角色」并列的另一类素材。角色卡是长期资产，
+    // 这里是「刚从外面拿回来的东西」—— 拖进来、@ 一下、出完图就可以扔。
+    this.qrefGrid = el("div", { class: "cw-qref-grid" });
+    this.qrefClearBtn = el("button", {
+      class: "cw-qref-clear",
+      type: "button",
+      text: "清空",
+      title: "把所有快速参考图拿走（图也删掉）",
+      onclick: (e) => {
+        e.stopPropagation();
+        this.clearQuickRefs();
+      },
+    });
+    this.qrefEl = el("div", { class: "cw-qref" }, [
+      el("div", { class: "cw-qref-head" }, [
+        el("span", { class: "cw-qref-title", text: "快速参考图" }),
+        el("span", { class: "cw-qref-hint", text: "拖进来 / Ctrl+V" }),
+        this.qrefClearBtn,
+      ]),
+      this.qrefGrid,
+    ]);
+
+    // 引用标记：决定 @卡名 最后换成什么。
+    // Qwen 编辑认 "image 1"，MiniMax H3 视频只认 "<Picture 1>"。
+    // 全局设置只能选一种，来回切太容易忘，所以每个节点自己带一个。
+    this.tagSel = el(
+      "select",
+      {
+        class: "cw-tag-select",
+        title:
+          "@卡名 替换成哪种标记。视频（MiniMax H3）用 <Picture 1>；图像编辑（Qwen）用 image 1。",
+      },
+      [
+        el("option", { value: "", text: "跟随设置" }),
+        el("option", { value: "image {n}", text: "image 1" }),
+        el("option", { value: "<Picture {n}>", text: "<Picture 1>" }),
+        el("option", { value: "图{n}", text: "图1" }),
+        el("option", { value: "图 {n}", text: "图 1" }),
+      ]
+    );
+    this.tagSel.value = "";
+    this.tagSel.addEventListener("change", () => this.pushPayload());
+
     this.headEl = el("div", { class: "cw-node-head" }, [
-      this.countEl,
+      el("div", { class: "cw-node-head-left" }, [this.countEl, this.tagSel]),
       el("button", {
         class: "cw-btn cw-btn-accent",
         text: "角色库 ▸",
@@ -99,6 +156,7 @@ class WorkbenchUI {
     this.container.replaceChildren(
       this.headEl,
       this.stageEl,
+      this.qrefEl,
       el("div", { class: "cw-prompt-wrap" }, [this.hl, this.ta]),
       this.quickEl
     );
@@ -126,6 +184,8 @@ class WorkbenchUI {
       // 给点击候选留出时间
       setTimeout(() => this.hideSuggest(), 140);
     });
+
+    this.bindQuickDrop();
   }
 
   /* ---------- 状态 ---------- */
@@ -157,6 +217,7 @@ class WorkbenchUI {
     this.unsubTheme = () => this.themeObserver.disconnect();
 
     this.renderStage();
+    this.renderQuickRefs();
     this.renderQuick();
     this.applyTheme();
   }
@@ -251,6 +312,221 @@ class WorkbenchUI {
     this.syncHighlight();
   }
 
+  /* ---------- 快速参考图 ---------- */
+
+  /**
+   * 「从外面拿回来的东西」的入口。
+   *
+   * 三个动作都指向同一个池子：拖进来、Ctrl+V、点空槽选文件。
+   * 图上传到 _quick/，payload 里只记相对路径 —— 工作流 JSON 不会被 base64 撑爆。
+   */
+  bindQuickDrop() {
+    const zone = this.qrefEl;
+
+    const hasFiles = (e) => {
+      const dt = e.dataTransfer;
+      if (!dt) return false;
+      const types = Array.from(dt.types || []);
+      return types.includes("Files") || types.some((t) => String(t).startsWith("image/"));
+    };
+
+    const clearOver = () => zone.classList.remove("is-over");
+
+    // 整块节点都能接：用户不用瞄准那三个小格子
+    this.container.addEventListener("dragover", (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      zone.classList.add("is-over");
+    });
+    this.container.addEventListener("dragleave", (e) => {
+      if (e.relatedTarget && this.container.contains(e.relatedTarget)) return;
+      clearOver();
+    });
+    this.container.addEventListener("drop", async (e) => {
+      if (!hasFiles(e)) return;
+      // 不拦住的话 ComfyUI 画布会把这张图变成一个新的 LoadImage 节点
+      e.preventDefault();
+      e.stopPropagation();
+      clearOver();
+      await this.addQuickFiles(e.dataTransfer?.files);
+    });
+
+    // 粘贴：焦点在提示词框里也能粘图 —— 图进参考图槽，不干扰文本输入
+    this.container.addEventListener("paste", async (e) => {
+      const items = Array.from(e.clipboardData?.items || []);
+      const blobs = items
+        .filter((it) => it.kind === "file" && String(it.type || "").startsWith("image/"))
+        .map((it) => it.getAsFile())
+        .filter(Boolean);
+      if (!blobs.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+      await this.addQuickFiles(blobs);
+    });
+  }
+
+  renderQuickRefs() {
+    const refs = this.quickRefs;
+    const cells = [];
+
+    refs.forEach((ref, i) => {
+      const cell = el("div", {
+        class: "cw-qref-cell is-filled" + (ref.pending ? " is-pending" : ""),
+        title: ref.pending
+          ? "正在放进来…"
+          : `点一下把 @${ref.name} 插进提示词（右上角 × 拿走）`,
+        onclick: () => {
+          if (!ref.pending) this.insertText(`@${ref.name} `);
+        },
+      });
+
+      if (ref.pending) {
+        cell.append(el("span", { class: "cw-qref-spin", text: "…" }));
+        cells.push(cell);
+      } else {
+        cell.append(
+          el("img", {
+            src: assetUrl(ref.file, 0),
+            alt: "",
+            draggable: "false",
+            onerror: () => cell.classList.add("is-broken"),
+          })
+        );
+        cell.append(el("span", { class: "cw-qref-name", text: `@${ref.name}` }));
+        cell.append(
+          el("button", {
+            class: "cw-qref-x",
+            type: "button",
+            text: "×",
+            title: "拿走（图也一起删）",
+            onclick: (e) => {
+              e.stopPropagation();
+              this.removeQuickRef(i);
+            },
+          })
+        );
+        cells.push(cell);
+      }
+    });
+
+    // 至少三个位置；填满三个后仍留一个空位继续加，到上限就收口
+    const empties =
+      refs.length >= QREF_MAX ? 0 : Math.max(1, 3 - refs.length);
+    for (let k = 0; k < empties; k++) {
+      const slot = el(
+        "button",
+        {
+          class: "cw-qref-cell is-empty",
+          type: "button",
+          title: "点这里选图；也可以直接把图拖到节点上，或复制图片后 Ctrl+V",
+          onclick: () => this.pickQuickFile(),
+        },
+        [el("span", { class: "cw-qref-plus", text: "+" })]
+      );
+      if (k === 0) slot.append(el("span", { class: "cw-qref-tip", text: "拖 / 粘贴" }));
+      cells.push(slot);
+    }
+
+    this.qrefGrid.replaceChildren(...cells);
+    this.qrefClearBtn.hidden = !refs.length;
+  }
+
+  pickQuickFile() {
+    if (!this.qrefInput) {
+      const input = el("input", { type: "file", accept: "image/*" });
+      input.multiple = true;
+      input.style.display = "none";
+      input.addEventListener("change", async () => {
+        const files = Array.from(input.files || []);
+        input.value = "";
+        await this.addQuickFiles(files);
+      });
+      document.body.append(input);
+      this.qrefInput = input;
+    }
+    this.qrefInput.click();
+  }
+
+  async addQuickFiles(files) {
+    const all = Array.from(files || []);
+    if (!all.length) return;
+    const imgs = all.filter((f) => f && String(f.type || "").startsWith("image/"));
+    if (!imgs.length) return toast("只收图片");
+
+    // 上限 6 张：再多就两行起步，会把提示词框挤没
+    const room = QREF_MAX - this.quickRefs.length;
+    if (room <= 0) return toast(`快速参考图最多 ${QREF_MAX} 张，先拿走几张`);
+    const list = imgs.slice(0, room);
+    if (imgs.length > room) toast(`只能再放 ${room} 张，多的没进来`);
+
+    for (const file of list) await this.addQuickFile(file);
+  }
+
+  async addQuickFile(file) {
+    // 先占位再上传：上传有往返，不给反馈用户会以为没吃进去
+    const ref = { file: "", name: this.nextRefName(), pending: true };
+    this.quickRefs.push(ref);
+    this.renderQuickRefs();
+
+    try {
+      const res = await cwApi.upload(file, { slot: "quick" });
+      if (!res || !res.file) throw new Error("没拿到文件路径");
+      ref.file = res.file;
+      ref.pending = false;
+    } catch (e) {
+      this.quickRefs = this.quickRefs.filter((r) => r !== ref);
+      toast(`放不进去：${e.message}`);
+    }
+
+    this.renderQuickRefs();
+    this.pushPayload();
+  }
+
+  /** 名字是 @ 的唯一钥匙：编号从小往大找空位，且必须避开台上的卡名 */
+  nextRefName() {
+    const used = new Set(this.quickRefs.map((r) => r.name));
+    for (const card of store.stagedCards) {
+      if (card.name) used.add(card.name);
+    }
+    for (let i = 1; i <= 99; i++) {
+      const name = `参考${i}`;
+      if (!used.has(name)) return name;
+    }
+    return `参考${this.quickRefs.length + 1}`;
+  }
+
+  async removeQuickRef(i) {
+    const ref = this.quickRefs[i];
+    if (!ref) return;
+    this.quickRefs.splice(i, 1);
+    this.renderQuickRefs();
+    this.pushPayload();
+    if (!ref.file) return;
+    try {
+      await cwApi.quickRefDelete(ref.file);
+    } catch (e) {
+      // 删不掉只是留个垃圾文件，prune 会收，不必打扰用户
+    }
+  }
+
+  async clearQuickRefs() {
+    if (!this.quickRefs.length) return;
+    const all = this.quickRefs.slice();
+    this.quickRefs = [];
+    this.renderQuickRefs();
+    this.pushPayload();
+    for (const ref of all) {
+      if (!ref.file) continue;
+      try {
+        await cwApi.quickRefDelete(ref.file);
+      } catch (e) {
+        /* 同上 */
+      }
+    }
+  }
+
   /* ---------- 标记色 ---------- */
 
   openColorPop(card, anchor) {
@@ -336,6 +612,10 @@ class WorkbenchUI {
     const colored = new Map();
     for (const card of store.stagedCards) {
       if (card.color && card.name) colored.set(card.name, card.color);
+    }
+    // 临时参考图没有标记色，统一给一个琥珀色，跟卡区分开
+    for (const ref of this.quickRefs) {
+      if (ref.file && ref.name) colored.set(ref.name, QREF_COLOR);
     }
 
     if (!text) {
@@ -459,14 +739,20 @@ class WorkbenchUI {
     if (!mention) return this.hideSuggest();
 
     const q = mention.query.toLowerCase();
-    const staged = store.stagedCards;
+    // 台上卡和临时参考图都能 @ —— 对提示词来说它们是一样的东西
+    const pool = [
+      ...store.stagedCards,
+      ...this.quickRefs
+        .filter((r) => r.file && r.name)
+        .map((r) => ({ name: r.name, thumb: r.file, qref: true })),
+    ];
 
-    if (!staged.length) {
+    if (!pool.length) {
       this.suggestions = [];
       this.suggestEl.replaceChildren(
         el("div", {
           class: "cw-suggest-empty",
-          text: "台上没有卡，先去角色库选几张",
+          text: "台上没卡、也没有临时参考图 —— 先去拿点东西回来",
         })
       );
       this.suggestIndex = 0;
@@ -474,13 +760,13 @@ class WorkbenchUI {
       return;
     }
 
-    this.suggestions = staged.filter((c) =>
+    this.suggestions = pool.filter((c) =>
       (c.name || "").toLowerCase().includes(q)
     );
 
     if (!this.suggestions.length) {
       this.suggestEl.replaceChildren(
-        el("div", { class: "cw-suggest-empty", text: `台上没有匹配「${mention.query}」的卡` })
+        el("div", { class: "cw-suggest-empty", text: `台上没有匹配「${mention.query}」的东西` })
       );
       this.suggestIndex = 0;
       this.showSuggest();
@@ -509,12 +795,17 @@ class WorkbenchUI {
           },
           [
             card.thumb || card.main
-              ? el("img", { src: assetUrl(card.thumb || card.main, store.bustOf(card.id)), alt: "" })
+              ? el("img", {
+                  src: assetUrl(card.thumb || card.main, card.id ? store.bustOf(card.id) : 0),
+                  alt: "",
+                })
               : null,
             el("span", { class: "cw-suggest-name", text: card.name || "?" }),
-            (card.identity || card.variable) && card.descOn !== false
-              ? el("i", { class: "cw-suggest-desc", title: "带角色设定" })
-              : null,
+            card.qref
+              ? el("i", { class: "cw-suggest-qref", title: "临时参考图" })
+              : (card.identity || card.variable) && card.descOn !== false
+                ? el("i", { class: "cw-suggest-desc", title: "带角色设定" })
+                : null,
           ]
         )
       )
@@ -607,7 +898,16 @@ class WorkbenchUI {
 
   pushPayload() {
     const widget = this.node.widgets?.find((w) => w.name === "payload");
-    if (widget) widget.value = JSON.stringify({ prompt: this.prompt });
+    if (widget) {
+      const payload = { prompt: this.prompt };
+      // 只存路径，不存图本身 —— 否则工作流 JSON 会被 base64 撑到几十兆
+      const quick = this.quickRefs
+        .filter((r) => r.file)
+        .map((r) => ({ file: r.file, name: r.name }));
+      if (quick.length) payload.quick = quick;
+      if (this.tagSel?.value) payload.tag = this.tagSel.value;
+      widget.value = JSON.stringify(payload);
+    }
     app.graph?.setDirtyCanvas(true, true);
   }
 
@@ -615,17 +915,36 @@ class WorkbenchUI {
     const widget = this.node.widgets?.find((w) => w.name === "payload");
     if (!widget || !widget.value) return;
     let prompt = "";
+    let quick = [];
+    let tag = "";
     try {
       const parsed = JSON.parse(widget.value);
       prompt = parsed && typeof parsed.prompt === "string" ? parsed.prompt : "";
+      if (parsed && Array.isArray(parsed.quick)) quick = parsed.quick;
+      if (parsed && typeof parsed.tag === "string") tag = parsed.tag;
     } catch (e) {
       prompt = typeof widget.value === "string" ? widget.value : "";
+    }
+    if (this.tagSel) {
+      this.tagSel.value = tag;
+      // 存的值不在选项里（老工作流 / 手改过 JSON）就退回「跟随设置」
+      if (this.tagSel.value !== tag) this.tagSel.value = "";
     }
     if (prompt) {
       this.prompt = prompt;
       this.ta.value = prompt;
       this.syncHighlight();
     }
+
+    // 上次没扔掉的临时图跟着工作流一起回来（文件还在就还在）
+    this.quickRefs = quick
+      .filter((r) => r && typeof r.file === "string" && r.file)
+      .map((r, i) => ({
+        file: r.file,
+        name: (r.name || "").trim() || `参考${i + 1}`,
+        pending: false,
+      }));
+    this.renderQuickRefs();
   }
 
   /* ---------- 打开卡库 ---------- */
@@ -681,9 +1000,11 @@ app.registerExtension({
 
     // 旧版本被撑坏的节点（高度几千），加载工作流时拉回正常尺寸
     const normalizeSize = (node) => {
-      const w = Math.max(node.size?.[0] || 0, 340);
+      const w = Math.max(node.size?.[0] || 0, 400);
       let h = node.size?.[1] || DEFAULT_SIZE[1];
-      if (!Number.isFinite(h) || h < 320) h = DEFAULT_SIZE[1];
+      // 加了快速参考图区之后，太矮的节点会把提示词框挤没
+      const minH = 560;
+      if (!Number.isFinite(h) || h < minH) h = DEFAULT_SIZE[1];
       if (h > MAX_NODE_HEIGHT) h = DEFAULT_SIZE[1];
       node.setSize([w, h]);
     };

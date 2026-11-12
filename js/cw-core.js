@@ -66,6 +66,9 @@ export const cwApi = {
     return req("/upload", { method: "POST", body: form });
   },
 
+  // ---- 快速参考图（临时素材，用完即扔）----
+  quickRefDelete: (file) => req("/quick/ref/delete", json({ file })),
+
   // ---- 补图 ----
   supplementPresets: () => req("/supplement/presets"),
   supplementRefresh: () => req("/supplement/refresh", json({})),
@@ -74,6 +77,7 @@ export const cwApi = {
   supplementActive: (cardId) => req(`/supplement/active?cardId=${encodeURIComponent(cardId)}`),
   supplementRerun: (body) => req("/supplement/rerun", json(body)),
   supplementCancel: (id) => req("/supplement/cancel", json({ id })),
+  supplementCancelItem: (id, key) => req("/supplement/cancel-item", json({ id, key })),
   supplementPromptPreview: (body) => req("/supplement/prompt-preview", json(body)),
   cardOrphans: (id) => req("/card/orphans", json({ id })),
   cardPrune: (id) => req("/card/prune", json({ id })),
@@ -329,9 +333,9 @@ export function injectStyle() {
   try {
     // v 参数用于让浏览器更新样式表缓存，改样式时记得改这个号。
     // 路径从 import.meta.url 推 —— 插件目录以后改名不用再动这里。
-    href = new URL("./style.css?v=1.3.1", import.meta.url).href;
+    href = new URL("./style.css?v=1.5.0", import.meta.url).href;
   } catch (e) {
-    href = "/extensions/ComfyUI_SummonDeck/style.css?v=1.3.1";
+    href = "/extensions/ComfyUI_SummonDeck/style.css?v=1.5.0";
   }
   if (document.querySelector(`link[data-cw-style="1"]`)) return;
   const link = document.createElement("link");

@@ -33,6 +33,47 @@
   flex: 0 0 auto;
 }
 
+.cw-node-head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+/* 引用标记下拉：默认收得很小，只在需要区分 <Picture 1> / image 1 时才动它 */
+.cw-tag-select {
+  flex: 0 0 auto;
+  max-width: 132px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  background: rgba(128, 128, 128, 0.08);
+  color: inherit;
+  font-family: inherit;
+  font-size: 10px;
+  opacity: 0.7;
+  cursor: pointer;
+  outline: none;
+  transition: opacity 0.12s, border-color 0.12s;
+}
+
+.cw-tag-select:hover,
+.cw-tag-select:focus {
+  opacity: 1;
+  border-color: rgba(128, 128, 128, 0.55);
+}
+
+.cw-tag-select option {
+  color: #111;
+  background: #fff;
+}
+
+.cw-dark .cw-tag-select option {
+  color: #e8e8e8;
+  background: #26272b;
+}
+
 .cw-node-count {
   font-size: 11px;
   opacity: 0.62;
@@ -120,6 +161,228 @@
 .cw-stage-empty:hover {
   opacity: 0.85;
   border-color: rgba(217, 96, 60, 0.6);
+}
+
+/* -------------------------------------------------------------------------
+   快速参考图
+   一行三格，aspect-ratio 撑高度 —— 节点拉宽拉窄时格子跟着实时缩放，
+   不需要在任何地方计算像素。
+   ------------------------------------------------------------------------- */
+
+.cw-qref {
+  flex: 0 0 auto;
+  padding: 6px 7px 7px;
+  border-radius: 9px;
+  border: 1px dashed rgba(128, 128, 128, 0.32);
+  background: rgba(128, 128, 128, 0.05);
+  transition: border-color 0.14s, background 0.14s;
+}
+
+/* 拖图悬停在节点上时整块亮起来 */
+.cw-qref.is-over {
+  border-color: #d9603c;
+  background: rgba(217, 96, 60, 0.12);
+}
+
+.cw-qref-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+
+.cw-qref-title {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.78;
+  white-space: nowrap;
+}
+
+.cw-qref-hint {
+  flex: 1 1 auto;
+  font-size: 10px;
+  opacity: 0.42;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cw-qref-clear {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 10px;
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.cw-qref-clear[hidden] {
+  display: none;
+}
+
+.cw-qref-clear:hover {
+  opacity: 1;
+  border-color: rgba(217, 96, 60, 0.7);
+  color: #d9603c;
+}
+
+.cw-qref-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.cw-qref-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+  padding: 0;
+  border-radius: 7px;
+  overflow: hidden;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.14s, background 0.14s;
+}
+
+.cw-qref-cell.is-filled {
+  border: 1px solid rgba(128, 128, 128, 0.38);
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.cw-qref-cell.is-filled img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cw-qref-cell.is-filled:hover {
+  border-color: rgba(192, 135, 60, 0.9);
+}
+
+/* 文件被清掉了（prune 或手动删）：显示斜纹，别显示破图标 */
+.cw-qref-cell.is-broken {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(128, 128, 128, 0.13),
+    rgba(128, 128, 128, 0.13) 5px,
+    transparent 5px,
+    transparent 10px
+  );
+}
+
+.cw-qref-cell.is-broken img {
+  display: none;
+}
+
+.cw-qref-cell.is-empty {
+  flex-direction: column;
+  gap: 1px;
+  border: 1px dashed rgba(128, 128, 128, 0.42);
+  background: rgba(128, 128, 128, 0.07);
+}
+
+.cw-qref-cell.is-empty:hover {
+  border-color: rgba(217, 96, 60, 0.75);
+  background: rgba(217, 96, 60, 0.09);
+}
+
+.cw-qref-plus {
+  font-size: 17px;
+  line-height: 1;
+  opacity: 0.42;
+}
+
+.cw-qref-tip {
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  opacity: 0.38;
+}
+
+.cw-qref-name {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 5px 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: left;
+  color: #fff;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.86),
+    rgba(0, 0, 0, 0.42) 58%,
+    rgba(0, 0, 0, 0)
+  );
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.cw-qref-x {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.58);
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 17px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s;
+}
+
+.cw-qref-cell:hover .cw-qref-x {
+  opacity: 1;
+}
+
+.cw-qref-x:hover {
+  background: #d9534f;
+}
+
+.cw-qref-cell.is-pending {
+  border: 1px dashed rgba(217, 96, 60, 0.6);
+}
+
+.cw-qref-spin {
+  font-size: 14px;
+  animation: cw-qref-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes cw-qref-pulse {
+  0%, 100% { opacity: 0.24; }
+  50% { opacity: 0.72; }
+}
+
+/* @ 候选里标记「这是临时参考图」 */
+.cw-suggest-qref {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: #c0873c;
 }
 
 .cw-chip {
@@ -1145,6 +1408,19 @@
   font-weight: 550;
 }
 
+.cw-cover-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.cw-cover-actions .cw-btn-mini {
+  flex: 1;
+  padding: 7px 0;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
 .cw-extras {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1664,6 +1940,11 @@
   font-weight: 650;
 }
 
+@keyframes cw-sup-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 .cw-sup-sub {
   margin-left: 10px;
   font-size: 12px;
@@ -2143,6 +2424,7 @@
 }
 
 .cw-sup-item-pic {
+  position: relative;
   width: 100%;
   aspect-ratio: 4 / 3;
   background: var(--cw-panel-soft);
@@ -2150,6 +2432,34 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+/* 采样中/排队中格子右上角的红叉：取消生成这一格 */
+.cw-sup-item-x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  background: rgba(192, 57, 43, 0.88);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.cw-sup-item-x:hover {
+  background: #e74c3c;
+  border-color: #fff;
+  transform: scale(1.08);
 }
 
 .cw-sup-item-pic img {
@@ -3138,3 +3448,43 @@
   color: #3f9b6a;
   background: rgba(63, 155, 106, 0.1);
 }
+
+/* 清空补图队列：次级按钮，有队列时才出现 */
+.cw-sup-clear {
+  border: 1px solid var(--cw-line-strong);
+  background: transparent;
+  color: var(--cw-text-dim);
+}
+
+.cw-sup-clear:hover {
+  border-color: #c0392b;
+  color: #c0392b;
+}
+
+/* 结果区顶部「正在生成」横幅：跑图时一眼看到当前角度 */
+.cw-sup-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--cw-accent);
+  background: var(--cw-accent-soft);
+}
+
+.cw-sup-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cw-accent);
+  animation: cw-sup-pulse 1.2s ease-in-out infinite;
+  flex: 0 0 auto;
+}
+
+.cw-sup-live-text {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cw-accent);
+}
+

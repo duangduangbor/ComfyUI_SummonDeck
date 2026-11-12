@@ -29,6 +29,16 @@ MULTI_HINT = "以上每个编号对应各自的参考图，请分别按对应图
 
 DESC_MODES = {"off", "core", "full"}
 
+# 多路参考图出口的数量。视频模型（H3 ref2va、Wan 之类）每路只吃一张图，
+# 所以除了「参考图」batch，还得给出「参考图1..N」单独出口，才能一张接一路。
+REF_SLOTS = 6
+
+# 空槽位的占位图。没接线时它不会被消费，接错了至少是张中灰，不会炸。
+BLANK_IMAGE = torch.full((1, 64, 64, 3), 0.5, dtype=torch.float32)
+
+# 引用标记写法：谁认哪种标记，就在节点头部那个下拉里选
+TAG_PRESETS = ("image {n}", "<Picture {n}>", "图{n}", "图 {n}")
+
 
 def _fmt(tpl: str, **kw) -> str:
     """用户手写的模板可能带奇怪的占位符，format 失败就原样返回，不让节点崩。"""
@@ -120,6 +130,15 @@ def build_desc_block(used_cards, template, desc_tpl, mode):
 # @ 解析
 # --------------------------------------------------------------------------
 
+def _tag(template: str, n: int) -> str:
+    """把 {n}/{i} 展开成这张图的引用标记。模板写歪了也不能让节点崩。"""
+    tpl = template or "image {n}"
+    try:
+        return tpl.format(n=n, i=n - 1)
+    except Exception:
+        return f"image {n}"
+
+
 def resolve_prompt(prompt: str, cards: list[dict], template: str):
     """把 prompt 里的 @卡名 换成模型能看懂的引用标记。
 
@@ -154,7 +173,7 @@ def resolve_prompt(prompt: str, cards: list[dict], template: str):
         n = final_of.get(slot_idx)
         if n is None:                      # 理论上不会发生
             return m.group(0)
-        return template.format(n=n, i=n - 1)
+        return _tag(template, n)
 
     new_prompt = PLACEHOLDER_RE.sub(_to_tag, prompt)
     used_cards = [slots[i] for i in order]
@@ -163,6 +182,46 @@ def resolve_prompt(prompt: str, cards: list[dict], template: str):
     dangling = re.findall(r"@([^\s@,，。、;；:：]+)", new_prompt)
 
     return new_prompt, used_cards, dangling
+
+
+def _quick_cards(quick) -> list[dict]:
+    """把「快速参考图」槽包成伪卡。
+
+    为什么不另起一套取图逻辑：@ 解析认的是「名字 → 图」，
+    角色卡和临时素材在这件事上没有区别。包成同一种形状，
+    编号就会自然按 @ 在句子里出现的先后排，不用写两遍。
+    """
+    out: list[dict] = []
+    for n, item in enumerate(quick or [], start=1):
+        if not isinstance(item, dict):
+            continue
+        rel = (item.get("file") or "").strip()
+        if not rel:
+            continue
+        out.append({
+            "id": f"_q{n}",
+            "name": _clean_text(item.get("name")) or f"参考{n}",
+            "quick": True,
+            "quickFile": rel,
+            # 临时图没有身份设定，设定块里要跳过它
+            "descOn": False,
+        })
+    return out
+
+
+def _dedupe_quick_names(entities: list[dict]) -> None:
+    """名字是 @ 的唯一钥匙，重了会把两张图指成一张。只让临时图让路，不动卡名。"""
+    seen = {(e.get("name") or "").strip() for e in entities if not e.get("quick")}
+    for e in entities:
+        if not e.get("quick"):
+            continue
+        name = (e.get("name") or "").strip()
+        base, n = name, 1
+        while name in seen:
+            n += 1
+            name = f"{base}_{n}"
+        seen.add(name)
+        e["name"] = name
 
 
 # --------------------------------------------------------------------------
@@ -217,7 +276,7 @@ def build_image_batch(paths: list, max_mp: float):
             print(f"[怪兽牌组] 读图失败 {p}: {exc}")
 
     if not arrays:
-        return torch.zeros((1, 64, 64, 3), dtype=torch.float32)
+        return BLANK_IMAGE.clone()
 
     tw = max(a.shape[1] for a in arrays)
     th = max(a.shape[0] for a in arrays)
@@ -225,6 +284,17 @@ def build_image_batch(paths: list, max_mp: float):
 
     stacked = np.stack(framed, axis=0).astype(np.float32) / 255.0
     return torch.from_numpy(stacked)
+
+
+def build_slot_image(path: str, max_mp: float):
+    """单张参考图，原样返回（不 pad、不补灰）。
+
+    为什么不能用上面那个 batch 拿去拆：batch 会被 pad 成统一画布、空隙填灰，
+    而视频模型是**每路一张**收参考图的（MiniMax H3 的 ref_image_N 只读 batch 第一张），
+    灰边会直接进模型。所以多路输出这条路必须走单图、保持原始比例。
+    """
+    arr = _limit_pixels(_load_array(path), max_mp)
+    return torch.from_numpy(arr.astype(np.float32) / 255.0).unsqueeze(0)
 
 
 # --------------------------------------------------------------------------
@@ -240,16 +310,26 @@ class CharacterWorkbench:
 
     CATEGORY = "怪兽牌组"
     FUNCTION = "run"
-    RETURN_TYPES = ("IMAGE", "STRING", "STRING", "INT", "STRING")
-    RETURN_NAMES = ("参考图", "提示词", "引用对照", "张数", "原始提示词")
+    RETURN_TYPES = ("IMAGE", "STRING", "STRING", "INT", "STRING") + ("IMAGE",) * REF_SLOTS
+    RETURN_NAMES = ("参考图", "提示词", "引用对照", "张数", "原始提示词") + tuple(
+        f"参考图{n}" for n in range(1, REF_SLOTS + 1)
+    )
     OUTPUT_TOOLTIPS = (
-        "按 prompt 中 @ 的先后顺序排列的参考图 batch",
-        "角色设定块 + 已把 @卡名 替换成引用标记的提示词",
+        "按 prompt 中 @ 的先后顺序排列的参考图 batch（角色卡 + 快速参考图混排编号）。"
+        "给「一次吃一批图」的模型用（Qwen-Image 编辑、IPAdapter 之类）",
+        "角色设定块 + 已把 @卡名 替换成引用标记的提示词。直接接到采样节点的 prompt 上",
         "第几张图对应哪张卡、带设定送出了几张，核对用",
         "本次实际送出的参考图张数",
         "角色设定块 + 你写的原文。不做 @ 替换、不自动加 image 编号，给 Qwen2.1 参考出图、Character Sheet 这类固定触发句的工作流用",
+    ) + tuple(
+        f"第 {n} 张参考图（原比例，不补灰）。接视频模型的 ref_image_{n - 1} 这类「一路一张」的输入"
+        for n in range(1, REF_SLOTS + 1)
     )
-    DESCRIPTION = "选卡上台，用 @卡名 在提示词里引用参考图。"
+    DESCRIPTION = (
+        "选卡上台，用 @卡名 引用。也可以把外面临时拿来的图拖/粘进「快速参考图」，"
+        "同样用 @参考N 引用 —— 这些图不进卡库，用完即扔。"
+        "右边「参考图1..6」是单独出口：视频模型每路只吃一张图，就一路接一张。"
+    )
     OUTPUT_NODE = False
 
     @classmethod
@@ -285,6 +365,16 @@ class CharacterWorkbench:
             state = {}
 
         prompt = state.get("prompt") or ""
+
+        # 引用标记：节点上选的那个优先于全局设置。
+        # 为什么要按节点选：Qwen 编辑认 "image 1"，H3 视频只认 "<Picture 1>"，
+        # 全局设置只能二选一，来回切太容易出洋相。
+        tag = state.get("tag")
+        if isinstance(tag, str):
+            tag = tag.strip()
+            if tag and ("{n}" in tag or "{i}" in tag):
+                template = tag
+
         # 工作台是全局的，从库里读；payload 里带的话优先（兼容老工作流）
         workbench_ids = state.get("workbench") or lib.get("workbench") or []
 
@@ -298,18 +388,23 @@ class CharacterWorkbench:
             elif isinstance(item, dict) and item.get("name"):
                 cards.append(item)
 
-        new_prompt, used_cards, dangling = resolve_prompt(prompt, cards, template)
+        # 临时参考图和角色卡进同一个池子：@谁谁就是 image N，不分贵贱
+        quick_cards = _quick_cards(state.get("quick"))
+        entities = cards + quick_cards
+        _dedupe_quick_names(entities)
+
+        new_prompt, used_cards, dangling = resolve_prompt(prompt, entities, template)
 
         # prompt 里一个 @ 都没有 —— 全台送上，按上台顺序编号
-        if not used_cards and cards:
-            used_cards = list(cards)
+        if not used_cards and entities:
+            used_cards = list(entities)
             renumbered = f"{new_prompt}".strip()
             if renumbered:
-                tags = " ".join(template.format(n=i, i=i - 1) for i in range(1, len(cards) + 1))
+                tags = " ".join(_tag(template, i) for i in range(1, len(entities) + 1))
                 new_prompt = f"{tags}. {renumbered}"
             else:
                 new_prompt = ", ".join(
-                    template.format(n=i, i=i - 1) for i in range(1, len(cards) + 1)
+                    _tag(template, i) for i in range(1, len(entities) + 1)
                 )
 
         # 角色设定：告诉模型每张图是谁、长什么样、哪些能动
@@ -332,6 +427,16 @@ class CharacterWorkbench:
 
         paths, mapping_lines = [], []
         for n, card in enumerate(used_cards, start=1):
+            # 临时参考图：直接指文件，不经过卡目录
+            if card.get("quick"):
+                p = storage.abs_asset(card.get("quickFile"))
+                if p:
+                    paths.append(str(p))
+                    mapping_lines.append(f"{len(paths)} ← {card.get('name', '?')}（临时图）")
+                else:
+                    mapping_lines.append(f"— {card.get('name', '?')} 临时图已丢失")
+                continue
+
             files = [card.get("main")] if card.get("main") else []
             if send_extras:
                 files += [e.get("file") for e in (card.get("extras") or []) if e.get("file")]
@@ -345,6 +450,21 @@ class CharacterWorkbench:
         images = build_image_batch(paths, max_mp)
         count = len(paths)
 
+        # 多路出口：一路一张、保持原比例，专门喂「每个插槽吃一张图」的模型
+        slots = []
+        for p in paths[:REF_SLOTS]:
+            try:
+                slots.append(build_slot_image(p, max_mp))
+            except Exception as exc:
+                print(f"[怪兽牌组] 单路读图失败 {p}: {exc}")
+                slots.append(BLANK_IMAGE.clone())
+        while len(slots) < REF_SLOTS:
+            slots.append(BLANK_IMAGE.clone())
+        if count > REF_SLOTS:
+            print(
+                f"[怪兽牌组] 参考图 {count} 张，超出 {REF_SLOTS} 路出口的部分只在「参考图」batch 里"
+            )
+
         mapping = "\n".join(mapping_lines) if mapping_lines else "（没有引用任何卡）"
         if desc_applied:
             mode_label = {"off": "关闭", "core": "身份锚定", "full": "全部设定"}.get(
@@ -356,7 +476,7 @@ class CharacterWorkbench:
             mapping += f"\n\n台上没有这些名字，未替换：{missing}"
             print(f"[怪兽牌组] 未匹配的 @ 引用：{missing}")
 
-        return (images, new_prompt, mapping, count, raw_out)
+        return (images, new_prompt, mapping, count, raw_out, *slots)
 
 
 NODE_CLASS_MAPPINGS = {"CharacterWorkbench": CharacterWorkbench}
