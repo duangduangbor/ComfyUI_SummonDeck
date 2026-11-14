@@ -1,0 +1,326 @@
+{
+ "id": "7cd1c7cc-efd0-40db-ab0d-ab3b453f4461",
+ "revision": 0,
+ "last_node_id": 7,
+ "last_link_id": 3,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "LoadVideo",
+   "pos": [
+    60,
+    90
+   ],
+   "size": [
+    282.798828125,
+    554.9898101306352
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "file",
+     "name": "file",
+     "type": "COMBO",
+     "widget": {
+      "name": "file"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "choose file to upload",
+     "name": "upload",
+     "type": "IMAGEUPLOAD",
+     "widget": {
+      "name": "upload"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "VIDEO",
+     "name": "VIDEO",
+     "type": "VIDEO",
+     "links": [
+      2
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "LoadVideo"
+   },
+   "widgets_values": [
+    "ref2va_00025.mp4",
+    "image"
+   ],
+   "widgets_values_named": {
+    "file": "ref2va_00025.mp4",
+    "upload": "image"
+   }
+  },
+  {
+   "id": 3,
+   "type": "ReCaVSRLoader",
+   "pos": [
+    60,
+    262
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "transformer",
+     "name": "transformer",
+     "type": "COMBO",
+     "widget": {
+      "name": "transformer"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "model",
+     "name": "model",
+     "type": "RECAVSR",
+     "links": [
+      1
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ReCaVSRLoader"
+   },
+   "widgets_values": [
+    "transformer_int8_convrot.safetensors"
+   ],
+   "widgets_values_named": {
+    "transformer": "transformer_int8_convrot.safetensors"
+   }
+  },
+  {
+   "id": 4,
+   "type": "ReCaVSRUpscale",
+   "pos": [
+    420,
+    90
+   ],
+   "size": [
+    270,
+    218
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "RECAVSR",
+     "link": 1
+    },
+    {
+     "name": "video",
+     "type": "VIDEO",
+     "link": 2
+    },
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "VIDEO",
+     "type": "VIDEO",
+     "links": [
+      3
+     ]
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "ReCaVSRUpscale"
+   },
+   "widgets_values": [
+    4,
+    "none",
+    42,
+    "fixed",
+    "flashdecoder",
+    "fast",
+    false,
+    "auto",
+    30
+   ],
+   "widgets_values_named": {
+    "scale": 4,
+    "color_fix": "none",
+    "seed": 42,
+    "control_after_generate": "fixed",
+    "decoder": "flashdecoder",
+    "kernels": "fast",
+    "kv_offload": false,
+    "encoder": "auto",
+    "fps": 30
+   }
+  },
+  {
+   "id": 6,
+   "type": "SaveVideo",
+   "pos": [
+    760,
+    90
+   ],
+   "size": [
+    270,
+    557.2213114754097
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "localized_name": "video",
+     "name": "video",
+     "type": "VIDEO",
+     "link": 3
+    },
+    {
+     "localized_name": "filename_prefix",
+     "name": "filename_prefix",
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "format",
+     "name": "format",
+     "type": "COMFY_DYNAMICCOMBO_V3",
+     "widget": {
+      "name": "format"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "codec",
+     "name": "format.codec",
+     "type": "COMFY_DYNAMICCOMBO_V3",
+     "widget": {
+      "name": "format.codec"
+     },
+     "link": null
+    },
+    {
+     "localized_name": "codec",
+     "name": "codec",
+     "shape": 7,
+     "type": "COMFY_DYNAMICCOMBO_V3",
+     "widget": {
+      "name": "codec"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "localized_name": "video",
+     "name": "video",
+     "type": "VIDEO",
+     "links": null
+    }
+   ],
+   "properties": {},
+   "widgets_values": [
+    "recavsr/4x",
+    "auto",
+    "auto",
+    "auto"
+   ],
+   "widgets_values_named": {
+    "filename_prefix": "recavsr/4x",
+    "format": "auto",
+    "format.codec": "auto",
+    "codec": "auto"
+   }
+  },
+  {
+   "id": 7,
+   "type": "MarkdownNote",
+   "pos": [
+    60,
+    724.9898101306352
+   ],
+   "size": [
+    560,
+    260
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "title": "怎么用 / 8G 实测",
+   "properties": {},
+   "widgets_values": [
+    "## ReCaVSR 视频超分（一步流式，基于 Wan2.2 TI2V-5B）\n\n把视频喂进去，边生成边解码写盘：21 帧一块、之后每 8 帧一块，所以**片子越长只费硬盘、不费显存**。音频和帧率跟着原片走。\n\n**用法**\n① LoadVideo 选片（也可以直接把视频拖到节点上）。\n② 看 scale 是不是你要的倍率，然后排队。\n③ 结果自动写到 `output/recavsr/`。\n\n## ⚠️ 4 倍在 8G 上的现实\n· 4 倍是模型训练倍率，但 480p 源会到 1920×2816，激活约 **18G**，这张卡跑不了。\n· 只有源 ≤ 360p（比如 320×480 → 1280×1920）才现实。\n· 480p 源请改用「ReCaVSR-视频超分-2x.json」。\n\n## 参数\n· scale 可以填 1.5 / 2 / 4；模型在 4 倍训练，2 倍和 1.5 倍是论文给的另外两档。\n· kv_offload 打开可把注意力历史放内存，牺牲速度换显存。"
+   ],
+   "widgets_values_named": {
+    "text": "## ReCaVSR 视频超分（一步流式，基于 Wan2.2 TI2V-5B）\n\n把视频喂进去，边生成边解码写盘：21 帧一块、之后每 8 帧一块，所以**片子越长只费硬盘、不费显存**。音频和帧率跟着原片走。\n\n**用法**\n① LoadVideo 选片（也可以直接把视频拖到节点上）。\n② 看 scale 是不是你要的倍率，然后排队。\n③ 结果自动写到 `output/recavsr/`。\n\n## ⚠️ 4 倍在 8G 上的现实\n· 4 倍是模型训练倍率，但 480p 源会到 1920×2816，激活约 **18G**，这张卡跑不了。\n· 只有源 ≤ 360p（比如 320×480 → 1280×1920）才现实。\n· 480p 源请改用「ReCaVSR-视频超分-2x.json」。\n\n## 参数\n· scale 可以填 1.5 / 2 / 4；模型在 4 倍训练，2 倍和 1.5 倍是论文给的另外两档。\n· kv_offload 打开可把注意力历史放内存，牺牲速度换显存。"
+   },
+   "color": "#432",
+   "bgcolor": "#653"
+  }
+ ],
+ "links": [
+  [
+   1,
+   3,
+   0,
+   4,
+   0,
+   "RECAVSR"
+  ],
+  [
+   2,
+   1,
+   0,
+   4,
+   1,
+   "VIDEO"
+  ],
+  [
+   3,
+   4,
+   0,
+   6,
+   0,
+   "VIDEO"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.3278464585752342,
+   "offset": [
+    200.87580673688484,
+    459.8744089084809
+   ]
+  }
+ },
+ "version": 0.4
+}

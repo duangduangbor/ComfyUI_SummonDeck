@@ -1,0 +1,747 @@
+{
+ "id": "02bc4b8a-d8db-470e-b8fd-425e96ffd4c0",
+ "revision": 0,
+ "last_node_id": 8,
+ "last_link_id": 10,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "CharacterWorkbench",
+   "pos": [
+    40,
+    120
+   ],
+   "size": [
+    470,
+    664
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [
+    {
+     "label": "payload",
+     "localized_name": "payload",
+     "name": "payload",
+     "type": "STRING",
+     "widget": {
+      "name": "payload"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "label": "参考图",
+     "localized_name": "参考图",
+     "name": "参考图",
+     "type": "IMAGE",
+     "links": null
+    },
+    {
+     "label": "提示词",
+     "localized_name": "提示词",
+     "name": "提示词",
+     "type": "STRING",
+     "links": [
+      6
+     ]
+    },
+    {
+     "label": "引用对照",
+     "localized_name": "引用对照",
+     "name": "引用对照",
+     "type": "STRING",
+     "links": null
+    },
+    {
+     "label": "张数",
+     "localized_name": "张数",
+     "name": "张数",
+     "type": "INT",
+     "links": null
+    },
+    {
+     "label": "原始提示词",
+     "localized_name": "原始提示词",
+     "name": "原始提示词",
+     "type": "STRING",
+     "links": null
+    },
+    {
+     "label": "参考图1",
+     "localized_name": "参考图1",
+     "name": "参考图1",
+     "type": "IMAGE",
+     "links": [
+      2
+     ]
+    },
+    {
+     "label": "参考图2",
+     "localized_name": "参考图2",
+     "name": "参考图2",
+     "type": "IMAGE",
+     "links": [
+      3
+     ]
+    },
+    {
+     "label": "参考图3",
+     "localized_name": "参考图3",
+     "name": "参考图3",
+     "type": "IMAGE",
+     "links": [
+      4
+     ]
+    },
+    {
+     "label": "参考图4",
+     "localized_name": "参考图4",
+     "name": "参考图4",
+     "type": "IMAGE",
+     "links": [
+      5
+     ]
+    },
+    {
+     "label": "参考图5",
+     "localized_name": "参考图5",
+     "name": "参考图5",
+     "type": "IMAGE",
+     "links": null
+    },
+    {
+     "label": "参考图6",
+     "localized_name": "参考图6",
+     "name": "参考图6",
+     "type": "IMAGE",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CharacterWorkbench"
+   },
+   "widgets_values": [
+    "{\"prompt\":\"\",\"tag\":\"<Picture {n}>\"}",
+    ""
+   ],
+   "widgets_values_named": {
+    "payload": "{\"prompt\":\"\",\"tag\":\"<Picture {n}>\"}",
+    "cw_ui": ""
+   }
+  },
+  {
+   "id": 2,
+   "type": "H3StudioModels",
+   "pos": [
+    600,
+    60
+   ],
+   "size": [
+    360,
+    130
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "label": "diffusion_model",
+     "localized_name": "diffusion_model",
+     "name": "diffusion_model",
+     "type": "COMBO",
+     "widget": {
+      "name": "diffusion_model"
+     },
+     "link": null
+    },
+    {
+     "label": "text_encoder",
+     "localized_name": "text_encoder",
+     "name": "text_encoder",
+     "type": "COMBO",
+     "widget": {
+      "name": "text_encoder"
+     },
+     "link": null
+    },
+    {
+     "label": "video_vae",
+     "localized_name": "video_vae",
+     "name": "video_vae",
+     "type": "COMBO",
+     "widget": {
+      "name": "video_vae"
+     },
+     "link": null
+    },
+    {
+     "label": "turbo_lora",
+     "localized_name": "turbo_lora",
+     "name": "turbo_lora",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "turbo_lora"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "label": "models",
+     "localized_name": "models",
+     "name": "models",
+     "type": "H3_STUDIO_MODELS",
+     "links": [
+      1
+     ]
+    }
+   ],
+   "properties": {
+    "Image Studio": "MiniMax H3",
+    "Node name for S&R": "H3StudioModels"
+   },
+   "widgets_values": [
+    "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+    "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "minimax_h3_video_vae_fp16.safetensors",
+    "minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors"
+   ],
+   "widgets_values_named": {
+    "diffusion_model": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+    "text_encoder": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "video_vae": "minimax_h3_video_vae_fp16.safetensors",
+    "turbo_lora": "minimax_h3_turbo_v4_step600_ema_pruned_comfyui.safetensors"
+   },
+   "color": "#443066",
+   "bgcolor": "#211635"
+  },
+  {
+   "id": 3,
+   "type": "H3StudioEdit",
+   "pos": [
+    600,
+    260
+   ],
+   "size": [
+    400,
+    284
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "label": "models",
+     "localized_name": "models",
+     "name": "models",
+     "type": "H3_STUDIO_MODELS",
+     "link": 1
+    },
+    {
+     "label": "image",
+     "localized_name": "image",
+     "name": "image",
+     "type": "IMAGE",
+     "link": 2
+    },
+    {
+     "label": "references.reference_image_2",
+     "localized_name": "reference_image_2",
+     "name": "references.reference_image_2",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": 3
+    },
+    {
+     "label": "instruction",
+     "localized_name": "instruction",
+     "name": "instruction",
+     "type": "STRING",
+     "widget": {
+      "name": "instruction"
+     },
+     "link": 6
+    },
+    {
+     "label": "aspect_ratio",
+     "localized_name": "aspect_ratio",
+     "name": "aspect_ratio",
+     "type": "COMBO",
+     "widget": {
+      "name": "aspect_ratio"
+     },
+     "link": null
+    },
+    {
+     "label": "megapixels",
+     "localized_name": "megapixels",
+     "name": "megapixels",
+     "type": "FLOAT",
+     "widget": {
+      "name": "megapixels"
+     },
+     "link": null
+    },
+    {
+     "label": "width",
+     "localized_name": "width",
+     "name": "width",
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "width"
+     },
+     "link": 9
+    },
+    {
+     "label": "height",
+     "localized_name": "height",
+     "name": "height",
+     "shape": 7,
+     "type": "INT",
+     "widget": {
+      "name": "height"
+     },
+     "link": 10
+    },
+    {
+     "name": "references.reference_image_3",
+     "type": "IMAGE",
+     "link": 4
+    },
+    {
+     "name": "references.reference_image_4",
+     "type": "IMAGE",
+     "link": 5
+    },
+    {
+     "localized_name": "reference_image_5",
+     "name": "references.reference_image_5",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "label": "image_job",
+     "localized_name": "image_job",
+     "name": "image_job",
+     "type": "H3_STILL_JOB",
+     "links": [
+      7
+     ]
+    }
+   ],
+   "properties": {
+    "Image Studio": "MiniMax H3",
+    "Node name for S&R": "H3StudioEdit"
+   },
+   "widgets_values": [
+    "",
+    "custom pixels",
+    1,
+    1024,
+    1024
+   ],
+   "widgets_values_named": {
+    "instruction": "",
+    "aspect_ratio": "custom pixels",
+    "megapixels": 1,
+    "width": 1024,
+    "height": 1024
+   },
+   "color": "#24395c",
+   "bgcolor": "#101c31",
+   "title": "② 牌组 → 图像编辑（尺寸可改）"
+  },
+  {
+   "id": 4,
+   "type": "H3StudioRender",
+   "pos": [
+    1080,
+    260
+   ],
+   "size": [
+    360,
+    174
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "label": "image_job",
+     "localized_name": "image_job",
+     "name": "image_job",
+     "type": "H3_STILL_JOB",
+     "link": 7
+    },
+    {
+     "label": "steps",
+     "localized_name": "steps",
+     "name": "steps",
+     "type": "INT",
+     "widget": {
+      "name": "steps"
+     },
+     "link": null
+    },
+    {
+     "label": "seed",
+     "localized_name": "seed",
+     "name": "seed",
+     "type": "INT",
+     "widget": {
+      "name": "seed"
+     },
+     "link": null
+    },
+    {
+     "label": "sampler_name",
+     "localized_name": "sampler_name",
+     "name": "sampler_name",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "sampler_name"
+     },
+     "link": null
+    },
+    {
+     "label": "scheduler",
+     "localized_name": "scheduler",
+     "name": "scheduler",
+     "shape": 7,
+     "type": "COMBO",
+     "widget": {
+      "name": "scheduler"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "label": "image",
+     "localized_name": "image",
+     "name": "image",
+     "type": "IMAGE",
+     "links": [
+      8
+     ]
+    },
+    {
+     "label": "run_info",
+     "localized_name": "run_info",
+     "name": "run_info",
+     "type": "STRING",
+     "links": null
+    }
+   ],
+   "properties": {
+    "Image Studio": "MiniMax H3",
+    "Node name for S&R": "H3StudioRender"
+   },
+   "widgets_values": [
+    12,
+    42,
+    "fixed",
+    "er_sde",
+    "simple"
+   ],
+   "widgets_values_named": {
+    "steps": 12,
+    "seed": 42,
+    "control_after_generate": "fixed",
+    "sampler_name": "er_sde",
+    "scheduler": "simple"
+   },
+   "color": "#25534d",
+   "bgcolor": "#102a27"
+  },
+  {
+   "id": 5,
+   "type": "SaveImage",
+   "pos": [
+    1500,
+    260
+   ],
+   "size": [
+    270,
+    58
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "label": "images",
+     "localized_name": "图片",
+     "name": "images",
+     "type": "IMAGE",
+     "link": 8
+    },
+    {
+     "label": "filename_prefix",
+     "localized_name": "文件名前缀",
+     "name": "filename_prefix",
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "label": "images",
+     "localized_name": "images",
+     "name": "images",
+     "type": "IMAGE",
+     "links": null
+    }
+   ],
+   "title": "出图",
+   "properties": {},
+   "widgets_values": [
+    "H3-牌组编辑"
+   ],
+   "widgets_values_named": {
+    "filename_prefix": "H3-牌组编辑"
+   }
+  },
+  {
+   "id": 6,
+   "type": "MarkdownNote",
+   "pos": [
+    600,
+    660
+   ],
+   "size": [
+    420,
+    240
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "title": "怎么用",
+   "properties": {},
+   "widgets_values": [
+    "# 牌组 → H3 图像编辑（尺寸可自定义）\n\n**参考图1 = 主图**（Picture 1，模型默认「保持不变」的那张）\n**参考图2~4 = 素材**（Picture 2..4：换装 / 换场景 / 换道具）\n\n## 用法\n① 左边「怪兽牌组」选卡，用 @卡名 写提示词；外部图可拖进「快速参考图」，用 @参考1 引用。\n② **尺寸改下面「宽度 / 高度」两个框**（默认 832×1216，2:3 竖版）。\n   · 两轴必须是 **32 的倍数**，否则自动取整。\n   · 参考图会按这个面积重新缩放 → 想保原图细节就把尺寸设到接近原图。\n   · 8G 显存别超过 2MP；面积翻倍，时间也基本翻倍。\n③ 接了几路就放几张：现在接满 4 路 = Picture 1~4。空槽位喂进去是灰图，会污染画面。\n④ 想要更多路：从牌组「参考图5」拖到编辑节点的 `+` 上，变成 Picture 5。\n\n## 时间（8G 实测，看步数不看张数）\n· 每步约 **60 秒**，2 张和 4 张参考图几乎一样快。\n· 12 步 ≈ 12~14 分钟（默认）；20 步 ≈ 22 分钟；8 步 ≈ 9 分钟。\n· 想快速试构图就降到 6~8 步，定了构图再拉回 12~20 步出图。\n\n## 提示词写法\n`<Picture 1>` 是主图，`<Picture 2>` 起是素材：\n把 <Picture 1> 的角色换上 <Picture 2> 的盔甲，站在 <Picture 3> 的场景里，全身构图，保持原画风。"
+   ],
+   "widgets_values_named": {
+    "text": "# 牌组 → H3 图像编辑（尺寸可自定义）\n\n**参考图1 = 主图**（Picture 1，模型默认「保持不变」的那张）\n**参考图2~4 = 素材**（Picture 2..4：换装 / 换场景 / 换道具）\n\n## 用法\n① 左边「怪兽牌组」选卡，用 @卡名 写提示词；外部图可拖进「快速参考图」，用 @参考1 引用。\n② **尺寸改下面「宽度 / 高度」两个框**（默认 832×1216，2:3 竖版）。\n   · 两轴必须是 **32 的倍数**，否则自动取整。\n   · 参考图会按这个面积重新缩放 → 想保原图细节就把尺寸设到接近原图。\n   · 8G 显存别超过 2MP；面积翻倍，时间也基本翻倍。\n③ 接了几路就放几张：现在接满 4 路 = Picture 1~4。空槽位喂进去是灰图，会污染画面。\n④ 想要更多路：从牌组「参考图5」拖到编辑节点的 `+` 上，变成 Picture 5。\n\n## 时间（8G 实测，看步数不看张数）\n· 每步约 **60 秒**，2 张和 4 张参考图几乎一样快。\n· 12 步 ≈ 12~14 分钟（默认）；20 步 ≈ 22 分钟；8 步 ≈ 9 分钟。\n· 想快速试构图就降到 6~8 步，定了构图再拉回 12~20 步出图。\n\n## 提示词写法\n`<Picture 1>` 是主图，`<Picture 2>` 起是素材：\n把 <Picture 1> 的角色换上 <Picture 2> 的盔甲，站在 <Picture 3> 的场景里，全身构图，保持原画风。"
+   },
+   "color": "#432",
+   "bgcolor": "#653"
+  },
+  {
+   "id": 7,
+   "type": "PrimitiveInt",
+   "pos": [
+    600,
+    600
+   ],
+   "size": [
+    230,
+    58
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "label": "value",
+     "localized_name": "value",
+     "name": "value",
+     "type": "INT",
+     "widget": {
+      "name": "value"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "label": "INT",
+     "localized_name": "INT",
+     "name": "INT",
+     "type": "INT",
+     "links": [
+      9
+     ]
+    }
+   ],
+   "title": "宽度 width（32 的倍数）",
+   "properties": {
+    "Node name for S&R": "PrimitiveInt"
+   },
+   "widgets_values": [
+    832
+   ],
+   "widgets_values_named": {
+    "value": 832
+   },
+   "color": "#232",
+   "bgcolor": "#353"
+  },
+  {
+   "id": 8,
+   "type": "PrimitiveInt",
+   "pos": [
+    880,
+    600
+   ],
+   "size": [
+    230,
+    58
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "label": "value",
+     "localized_name": "value",
+     "name": "value",
+     "type": "INT",
+     "widget": {
+      "name": "value"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "label": "INT",
+     "localized_name": "INT",
+     "name": "INT",
+     "type": "INT",
+     "links": [
+      10
+     ]
+    }
+   ],
+   "title": "高度 height（32 的倍数）",
+   "properties": {
+    "Node name for S&R": "PrimitiveInt"
+   },
+   "widgets_values": [
+    1216
+   ],
+   "widgets_values_named": {
+    "value": 1216
+   },
+   "color": "#232",
+   "bgcolor": "#353"
+  }
+ ],
+ "links": [
+  [
+   1,
+   2,
+   0,
+   3,
+   0,
+   "H3_STUDIO_MODELS"
+  ],
+  [
+   2,
+   1,
+   5,
+   3,
+   1,
+   "IMAGE"
+  ],
+  [
+   3,
+   1,
+   6,
+   3,
+   2,
+   "IMAGE"
+  ],
+  [
+   4,
+   1,
+   7,
+   3,
+   8,
+   "IMAGE"
+  ],
+  [
+   5,
+   1,
+   8,
+   3,
+   9,
+   "IMAGE"
+  ],
+  [
+   6,
+   1,
+   1,
+   3,
+   3,
+   "STRING"
+  ],
+  [
+   7,
+   3,
+   0,
+   4,
+   0,
+   "H3_STILL_JOB"
+  ],
+  [
+   8,
+   4,
+   0,
+   5,
+   0,
+   "IMAGE"
+  ],
+  [
+   9,
+   7,
+   0,
+   3,
+   6,
+   "INT"
+  ],
+  [
+   10,
+   8,
+   0,
+   3,
+   7,
+   "INT"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.45,
+   "offset": [
+    941.1111111111111,
+    121.11111111111109
+   ]
+  }
+ },
+ "extensions": {
+  "widget_idx_map": {
+   "10": {
+    "seed": 0,
+    "sampler_name": 4,
+    "scheduler": 5
+   }
+  }
+ },
+ "version": 0.4
+}
