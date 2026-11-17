@@ -1,0 +1,970 @@
+{
+  "id": "charcard-qwen21-workbench",
+  "revision": 0,
+  "last_node_id": 17,
+  "last_link_id": 25,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "UNETLoader",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        440,
+        82
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "slot_index": 0,
+          "links": [
+            10
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "UNETLoader"
+      },
+      "widgets_values": [
+        "(Qwen2.1)redqw21UNLOCKEDREDGPTK2tAE_redqw21UNLOCKEDV1T2I_bf16.safetensors",
+        "default"
+      ],
+      "title": "① 主模型（Qwen2.1 fp16 写实微调）"
+    },
+    {
+      "id": 2,
+      "type": "CLIPLoader",
+      "pos": [
+        40,
+        150
+      ],
+      "size": [
+        440,
+        106
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            6
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader"
+      },
+      "widgets_values": [
+        "qwen3vl_8b_w4a8.safetensors",
+        "qwen_image",
+        "default"
+      ],
+      "title": "② 文本编码器（原版 INT8）"
+    },
+    {
+      "id": 3,
+      "type": "VAELoader",
+      "pos": [
+        40,
+        290
+      ],
+      "size": [
+        440,
+        58
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            7,
+            15
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAELoader"
+      },
+      "widgets_values": [
+        "qwen_image_2.1_vae_bf16.safetensors"
+      ],
+      "title": "③ VAE"
+    },
+    {
+      "id": 4,
+      "type": "CharacterWorkbench",
+      "pos": [
+        40,
+        380
+      ],
+      "size": [
+        452,
+        470
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "参考图",
+          "type": "IMAGE",
+          "links": [],
+          "slot_index": 0
+        },
+        {
+          "name": "提示词",
+          "type": "STRING",
+          "links": [
+            24
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "引用对照",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 2
+        },
+        {
+          "name": "张数",
+          "type": "INT",
+          "links": [],
+          "slot_index": 3
+        },
+        {
+          "name": "原始提示词",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 4
+        },
+        {
+          "name": "参考图1",
+          "type": "IMAGE",
+          "slot_index": 5,
+          "links": [
+            2,
+            3
+          ]
+        },
+        {
+          "name": "参考图2",
+          "type": "IMAGE",
+          "slot_index": 6,
+          "links": [
+            22
+          ]
+        },
+        {
+          "name": "参考图3",
+          "type": "IMAGE",
+          "slot_index": 7,
+          "links": [
+            23
+          ]
+        },
+        {
+          "name": "参考图4",
+          "type": "IMAGE",
+          "slot_index": 8,
+          "links": []
+        },
+        {
+          "name": "参考图5",
+          "type": "IMAGE",
+          "slot_index": 9,
+          "links": []
+        },
+        {
+          "name": "参考图6",
+          "type": "IMAGE",
+          "slot_index": 10,
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CharacterWorkbench"
+      },
+      "widgets_values": [
+        "{\"prompt\": \"保持参考图1中人物的面部特征、五官比例与长相完全不变，为她换上深蓝色针织连衣裙，站在午后落地窗前，中景半身，柔和自然光从侧后方打来，写实电影感人像。\"}"
+      ],
+      "title": "④ 选卡上台 · 写提示词"
+    },
+    {
+      "id": 6,
+      "type": "ImageScale",
+      "pos": [
+        540,
+        510
+      ],
+      "size": [
+        340,
+        130
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "image",
+          "name": "image",
+          "shape": null,
+          "type": "IMAGE",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            5
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageScale"
+      },
+      "widgets_values": [
+        "lanczos",
+        1600,
+        992,
+        "center"
+      ],
+      "title": "① 改宽高 → 出图画幅（32 的倍数）"
+    },
+    {
+      "id": 7,
+      "type": "ImageScaleToMaxDimension",
+      "pos": [
+        540,
+        680
+      ],
+      "size": [
+        340,
+        106
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "image",
+          "name": "image",
+          "shape": null,
+          "type": "IMAGE",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            4
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ImageScaleToMaxDimension"
+      },
+      "widgets_values": [
+        "lanczos",
+        1600
+      ],
+      "title": "② 保比例（不改）"
+    },
+    {
+      "id": 8,
+      "type": "ComfySwitchNode",
+      "pos": [
+        940,
+        640
+      ],
+      "size": [
+        400,
+        130
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "on_false",
+          "name": "on_false",
+          "shape": null,
+          "type": "IMAGE",
+          "link": 4
+        },
+        {
+          "localized_name": "on_true",
+          "name": "on_true",
+          "shape": null,
+          "type": "IMAGE",
+          "link": 5
+        },
+        {
+          "localized_name": "switch",
+          "name": "switch",
+          "shape": null,
+          "type": "BOOLEAN",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "IMAGE",
+          "links": [
+            8
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ComfySwitchNode"
+      },
+      "widgets_values": [
+        true
+      ],
+      "title": "③ 走哪条：true=精确宽高"
+    },
+    {
+      "id": 9,
+      "type": "TextEncodeQwenImageEditPlus",
+      "pos": [
+        940,
+        40
+      ],
+      "size": [
+        360,
+        300
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 6
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 7
+        },
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 8
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": 22
+        },
+        {
+          "name": "image3",
+          "type": "IMAGE",
+          "link": 23
+        },
+        {
+          "name": "prompt",
+          "type": "STRING",
+          "widget": {
+            "name": "prompt"
+          },
+          "link": 25
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            11
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImageEditPlus"
+      },
+      "widgets_values": [
+        "参考@参考1 的构图、景别和光线，两个人手牵着手并排往前走，镜头略低。改成真人写实风格：把男人换成 @浪客，女孩换成 @糯米。"
+      ],
+      "title": "编码：三路参考 → 条件"
+    },
+    {
+      "id": 10,
+      "type": "KSampler",
+      "pos": [
+        1460,
+        40
+      ],
+      "size": [
+        420,
+        262
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 10
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 11
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 12
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            14
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSampler"
+      },
+      "widgets_values": [
+        42,
+        "randomize",
+        20,
+        1,
+        "euler",
+        "simple",
+        1
+      ],
+      "title": "⑦ 采样：25 步 / cfg 1.0 / euler / simple"
+    },
+    {
+      "id": 11,
+      "type": "VAEDecode",
+      "pos": [
+        1460,
+        340
+      ],
+      "size": [
+        240,
+        58
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "samples",
+          "name": "samples",
+          "shape": null,
+          "type": "LATENT",
+          "link": 14
+        },
+        {
+          "localized_name": "vae",
+          "name": "vae",
+          "shape": null,
+          "type": "VAE",
+          "link": 15
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            16
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 12,
+      "type": "SaveImage",
+      "pos": [
+        1460,
+        430
+      ],
+      "size": [
+        420,
+        620
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "images",
+          "name": "images",
+          "shape": null,
+          "type": "IMAGE",
+          "link": 16
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "角色卡_Qwen"
+      ]
+    },
+    {
+      "id": 13,
+      "type": "MarkdownNote",
+      "pos": [
+        940,
+        810
+      ],
+      "size": [
+        560,
+        1060
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "MarkdownNote"
+      },
+      "widgets_values": [
+        "## 角色卡工作台 · Qwen2.1 参考出图（redqw21 · 多图）\n\n**台上选卡 + 拖临时图 → 三路参考进条件 → 出图。**\n\n### 底座\n`(Qwen2.1)redqw21UNLOCKEDREDGPTK2tAE_redqw21UNLOCKEDV1T2I_bf16.safetensors`\nCLIP `qwen3vl_8b_w4a8` / VAE `qwen_image_2.1_vae_bf16` · **cfg 1.0 / 20 步 / euler simple** · 无 LoRA\n\n### 三路各管什么\n| 输入 | 接哪一路 | 作用 |\n|---|---|---|\n| image 1 | 参考图1 | 构图 / 景别 / 背景 / 光线（**人物不从这里来**）|\n| image 2 | 参考图2 | 第一个人物 |\n| image 3 | 参考图3 | 第二个人物 |\n\n编码节点上面的 `String Concatenate` 是一段**固定说明**（英文），自动拼在你的提示词前面，\n专门告诉模型「image 1 只借场景、不借人脸」。不要删它，删了模型容易把构图图里的人一起画进来。\n\n### 动作必须写成具体句子（实测踩过）\n只写「参考 image 1 的动作」，模型基本抓不住 —— 它会把背景、人物换对，但两个人就那么站着，\n**不会牵手、不会往前走**。写成具体动作就稳了：\n\n> ✅ 两个人手牵着手并排往前走，镜头略低\n> ❌ 参考图1 的动作\n\n景别、机位也一样：「中景」「略低角度」「正面」比「参考构图」有用得多。\n\n### 提示词用哪一路\n节点接的是 **「提示词」**，不是「原始提示词」。「提示词」会把 `@名字` 换成 image 1 / 2 / 3，\n并把「谁是谁、长什么样」的设定块放最前；「原始提示词」不换，模型看到字面的 `@浪客` 等于没说。\n\n**编号 = `@` 在句子里出现的先后顺序**：默认例句里 @参考1 第一、@浪客 第二、@糯米 第三，\n于是 image 1 = 参考1、image 2 = 浪客、image 3 = 糯米。顺序反了编号跟着反 ——\n**看节点上「引用对照」的编号表，别靠印象。**\n\n### 提示词里要写「换成什么」\n只说「换成 @浪客」，模型只换头、身体还是原图的衬衫短裤。补外形就正常：\n`秃头、蓝色发光的独眼、尖牙、瘦长的黑色身躯`。\n\n### 画幅\n`Image Scale` 的 width / height = 出图尺寸，**32 的倍数**。下面 `Get Image Size`\n自动读尺寸建 latent，**不用改第二处**。\n「③ 走哪条」= true 精确宽高（居中裁）；false 只按长边等比缩放。\n\n### 耗时（3060 Ti 8G，832×1216）\n12 步 ≈ 115~170 秒，20 步 ≈ 2.5~4 分钟。三图比单图慢约 30%。\n\n### 只有一个人物\nimage 3 会收到灰图，**实测无害**（不发灰、不出灰块）。只上一张卡时别写「把第二个换成…」。\n"
+      ]
+    },
+    {
+      "id": 14,
+      "type": "TextEncodeQwenImageEdit",
+      "title": "负向（cfg 1.0 不参与计算）",
+      "pos": [
+        940,
+        300
+      ],
+      "size": [
+        360,
+        140
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 21
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "slot_index": 0,
+          "links": [
+            12
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "TextEncodeQwenImageEdit"
+      },
+      "widgets_values": [
+        "lowres, bad anatomy, deformed hands, extra fingers, blurry"
+      ]
+    },
+    {
+      "id": 15,
+      "type": "GetImageSize",
+      "title": "② 读缩放后的宽高",
+      "pos": [
+        1240,
+        800
+      ],
+      "size": [
+        240,
+        106
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 18
+        }
+      ],
+      "outputs": [
+        {
+          "name": "width",
+          "type": "INT",
+          "slot_index": 0,
+          "links": [
+            19
+          ]
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "slot_index": 1,
+          "links": [
+            20
+          ]
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "slot_index": 2,
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "GetImageSize"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 16,
+      "type": "EmptyLatentImage",
+      "title": "建 latent（尺寸自动跟随上面）",
+      "pos": [
+        1240,
+        940
+      ],
+      "size": [
+        240,
+        106
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": 19
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": 20
+        }
+      ],
+      "outputs": [
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [
+            13
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "EmptyLatentImage"
+      },
+      "widgets_values": [
+        1600,
+        992,
+        1
+      ]
+    },
+    {
+      "id": 17,
+      "type": "StringConcatenate",
+      "title": "固定说明（拼在提示词前面）",
+      "pos": [
+        940,
+        -130
+      ],
+      "size": [
+        360,
+        150
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "string_a",
+          "type": "STRING",
+          "widget": {
+            "name": "string_a"
+          },
+          "link": null
+        },
+        {
+          "name": "string_b",
+          "type": "STRING",
+          "widget": {
+            "name": "string_b"
+          },
+          "link": 24
+        },
+        {
+          "name": "delimiter",
+          "type": "STRING",
+          "widget": {
+            "name": "delimiter"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "slot_index": 0,
+          "links": [
+            25
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "StringConcatenate"
+      },
+      "widgets_values": [
+        "Image 1 is ONLY a reference for the scene: copy its camera angle, framing, background and lighting. Do not copy the faces, hair or clothes of the people in image 1. The first person becomes the character in image 2, the second person becomes the character in image 3. Photorealistic photograph.",
+        "",
+        "\n\n"
+      ]
+    }
+  ],
+  "links": [
+    [
+      2,
+      4,
+      5,
+      6,
+      0,
+      "IMAGE"
+    ],
+    [
+      3,
+      4,
+      5,
+      7,
+      0,
+      "IMAGE"
+    ],
+    [
+      4,
+      7,
+      0,
+      8,
+      0,
+      "IMAGE"
+    ],
+    [
+      5,
+      6,
+      0,
+      8,
+      1,
+      "IMAGE"
+    ],
+    [
+      6,
+      2,
+      0,
+      9,
+      0,
+      "CLIP"
+    ],
+    [
+      7,
+      3,
+      0,
+      9,
+      1,
+      "VAE"
+    ],
+    [
+      8,
+      8,
+      0,
+      9,
+      2,
+      "IMAGE"
+    ],
+    [
+      10,
+      1,
+      0,
+      10,
+      0,
+      "MODEL"
+    ],
+    [
+      11,
+      9,
+      0,
+      10,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      12,
+      14,
+      0,
+      10,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      13,
+      16,
+      0,
+      10,
+      3,
+      "LATENT"
+    ],
+    [
+      14,
+      10,
+      0,
+      11,
+      0,
+      "LATENT"
+    ],
+    [
+      15,
+      3,
+      0,
+      11,
+      1,
+      "VAE"
+    ],
+    [
+      16,
+      11,
+      0,
+      12,
+      0,
+      "IMAGE"
+    ],
+    [
+      18,
+      8,
+      0,
+      15,
+      0,
+      "IMAGE"
+    ],
+    [
+      19,
+      15,
+      0,
+      16,
+      0,
+      "INT"
+    ],
+    [
+      20,
+      15,
+      1,
+      16,
+      1,
+      "INT"
+    ],
+    [
+      21,
+      2,
+      0,
+      14,
+      0,
+      "CLIP"
+    ],
+    [
+      22,
+      4,
+      6,
+      9,
+      3,
+      "IMAGE"
+    ],
+    [
+      23,
+      4,
+      7,
+      9,
+      4,
+      "IMAGE"
+    ],
+    [
+      24,
+      4,
+      1,
+      17,
+      1,
+      "STRING"
+    ],
+    [
+      25,
+      17,
+      0,
+      9,
+      5,
+      "STRING"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.62,
+      "offset": [
+        10,
+        10
+      ]
+    }
+  },
+  "version": 0.4
+}
