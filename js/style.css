@@ -496,6 +496,13 @@
   font-weight: 600;
 }
 
+/* 引用了不存在的名字：红色 + 波浪下划线，一眼能看出这句不会生效 */
+.cw-hl-mention.is-dangling {
+  color: #e5484d;
+  text-decoration: underline wavy rgba(229, 72, 77, 0.65);
+  text-underline-offset: 3px;
+}
+
 .cw-prompt {
   position: relative;
   z-index: 1;

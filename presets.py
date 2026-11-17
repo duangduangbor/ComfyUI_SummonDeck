@@ -297,15 +297,19 @@ PRESETS: list[dict] = [
         "hint": "拿底稿当参考图，逐张改成别的视角。参考图驱动，身份靠图锚定，"
                 "单张不满意只重跑那一张。",
         "need": {
+            # patterns 是按优先级排的（probe._match 取第一个命中的当默认），
+            # 所以当前主用的模型写在最前面；同族其他模型仍留在候选里可切换
             "unet": {"families": ["qwen"],
-                     "patterns": ["*qwen_image_2.1*", "*qwen_image*", "*qwen*"]},
-            "clip": {"patterns": ["*qwen3vl_8b*", "*qwenImage21*", "*qwen3vl*", "*qwen*"]},
+                     "patterns": ["*redqw21*", "*redqw*", "*qwen-image-2.1*",
+                                  "*qwen_image_2.1*", "*qwen*"]},
+            "clip": {"patterns": ["*qwen3vl_8b_w4a8*", "*qwen3vl_8b*", "*qwenImage21*",
+                                  "*qwen3vl*", "*qwen*"]},
             "vae":  {"patterns": ["*qwen_image_2.1_vae*", "*qwen_image_vae*", "*qwen*vae*"]},
         },
         "views": DEFAULT_SET_VIEWS,
         "size": {"base": 1024, "max": 1280},
         "steps": 20,
-        "cfg": 1.0,
+        "cfg": 1.0,  # redqw 实测 1.0 已足够稳，且比 3.0 快一倍多
         "sampler": "euler",
         "scheduler": "simple",
         "inject": [
@@ -313,19 +317,20 @@ PRESETS: list[dict] = [
             {"key": "clip", "type": "CLIPLoader", "input": "clip_name"},
             {"key": "vae", "type": "VAELoader", "input": "vae_name"},
             {"key": "image", "type": "LoadImage", "input": "image"},
-            {"key": "prompt", "node": "6", "type": "TextEncodeQwenImage21", "input": "prompt"},
-            {"key": "negative", "node": "6", "type": "TextEncodeQwenImage21",
-             "input": "negative_prompt"},
+            {"key": "prompt", "node": "6", "type": "TextEncodeQwenImageEdit", "input": "prompt"},
+            {"key": "negative", "node": "11", "type": "TextEncodeQwenImageEdit",
+             "input": "prompt"},
             {"key": "seed", "type": "KSampler", "input": "seed"},
             {"key": "width", "type": "EmptyLatentImage", "input": "width"},
             {"key": "height", "type": "EmptyLatentImage", "input": "height"},
             {"key": "prefix", "type": "SaveImage", "input": "filename_prefix"},
         ],
-        # 参考图驱动时负向几乎无效（cfg=1.0），留空
+        # 参考图驱动 + cfg 1.0，负向分支不参与计算，留空
         "negative": "",
         "workflow": {
             "1": {"class_type": "UNETLoader",
-                  "inputs": {"unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+                  "inputs": {"unet_name":
+                             "(Qwen2.1)redqw21UNLOCKEDREDGPTK2tAE_redqw21UNLOCKEDV1T2I_bf16.safetensors",
                              "weight_dtype": "default"}},
             "2": {"class_type": "CLIPLoader",
                   "inputs": {"clip_name": "qwen3vl_8b_w4a8.safetensors",
@@ -335,15 +340,18 @@ PRESETS: list[dict] = [
             "4": {"class_type": "QwenImage21Cache",
                   "inputs": {"model": ["1", 0], "device": "auto", "dtype": "default"}},
             "5": {"class_type": "LoadImage", "inputs": {"image": "cw_reference.png"}},
-            "6": {"class_type": "TextEncodeQwenImage21",
-                  "inputs": {"clip": ["2", 0],
-                             "prompt": "full body shot, front view, standing straight",
-                             "negative_prompt": "", "vae": ["3", 0], "resolution": 0,
-                             "images.image_1": ["5", 0]}},
+            # 参考图必须走 TextEncodeQwenImageEdit 的 image 入口才会真正进入条件。
+            # 用 TextEncodeQwenImage21 的 images 参数在纯 T2I 权重上会被完全忽略
+            # （实测参考图是黑发白裙女孩，出图变成穿蓝衬衫的男人）。
+            "6": {"class_type": "TextEncodeQwenImageEdit",
+                  "inputs": {"clip": ["2", 0], "vae": ["3", 0], "image": ["5", 0],
+                             "prompt": "full body shot, front view, standing straight"}},
+            "11": {"class_type": "TextEncodeQwenImageEdit",
+                   "inputs": {"clip": ["2", 0], "prompt": ""}},
             "7": {"class_type": "EmptyLatentImage",
                   "inputs": {"width": 832, "height": 1216, "batch_size": 1}},
             "8": {"class_type": "KSampler",
-                  "inputs": {"model": ["4", 0], "positive": ["6", 0], "negative": ["6", 1],
+                  "inputs": {"model": ["4", 0], "positive": ["6", 0], "negative": ["11", 0],
                              "latent_image": ["7", 0], "seed": 42, "steps": 20, "cfg": 1.0,
                              "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
             "9": {"class_type": "VAEDecode",
@@ -529,9 +537,13 @@ PRESETS: list[dict] = [
         "needsImage": False,
         "hint": "没有现成图时，用一段描述先画一张底稿。画完可以再裁、再补图。",
         "need": {
+            # patterns 是按优先级排的（probe._match 取第一个命中的当默认），
+            # 所以当前主用的模型写在最前面；同族其他模型仍留在候选里可切换
             "unet": {"families": ["qwen"],
-                     "patterns": ["*qwen_image_2.1*", "*qwen_image*", "*qwen*"]},
-            "clip": {"patterns": ["*qwen3vl_8b*", "*qwenImage21*", "*qwen3vl*", "*qwen*"]},
+                     "patterns": ["*redqw21*", "*redqw*", "*qwen-image-2.1*",
+                                  "*qwen_image_2.1*", "*qwen*"]},
+            "clip": {"patterns": ["*qwen3vl_8b_w4a8*", "*qwen3vl_8b*", "*qwenImage21*",
+                                  "*qwen3vl*", "*qwen*"]},
             "vae":  {"patterns": ["*qwen_image_2.1_vae*", "*qwen_image_vae*", "*qwen*vae*"]},
         },
         "size": {"base": 1024, "max": 1280},
@@ -552,7 +564,8 @@ PRESETS: list[dict] = [
         "negative": "",
         "workflow": {
             "1": {"class_type": "UNETLoader",
-                  "inputs": {"unet_name": "qwen_image_2.1_int8_convrot.safetensors",
+                  "inputs": {"unet_name":
+                             "(Qwen2.1)redqw21UNLOCKEDREDGPTK2tAE_redqw21UNLOCKEDV1T2I_bf16.safetensors",
                              "weight_dtype": "default"}},
             "2": {"class_type": "CLIPLoader",
                   "inputs": {"clip_name": "qwen3vl_8b_w4a8.safetensors",

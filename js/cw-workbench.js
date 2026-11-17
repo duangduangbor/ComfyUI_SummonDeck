@@ -391,7 +391,13 @@ class WorkbenchUI {
             src: assetUrl(ref.file, 0),
             alt: "",
             draggable: "false",
-            onerror: () => cell.classList.add("is-broken"),
+            onerror: () => {
+              // 文件已经不在了：格子标坏，提示词里的 @名字 也跟着变红，
+              // 别让它看着像还有效
+              cell.classList.add("is-broken");
+              ref.broken = true;
+              this.syncHighlight();
+            },
           })
         );
         cell.append(el("span", { class: "cw-qref-name", text: `@${ref.name}` }));
@@ -466,7 +472,7 @@ class WorkbenchUI {
 
   async addQuickFile(file) {
     // 先占位再上传：上传有往返，不给反馈用户会以为没吃进去
-    const ref = { file: "", name: this.nextRefName(), pending: true };
+    const ref = { file: "", name: this.nextRefName(), pending: true, broken: false };
     this.quickRefs.push(ref);
     this.renderQuickRefs();
 
@@ -613,9 +619,10 @@ class WorkbenchUI {
     for (const card of store.stagedCards) {
       if (card.color && card.name) colored.set(card.name, card.color);
     }
-    // 临时参考图没有标记色，统一给一个琥珀色，跟卡区分开
+    // 临时参考图没有标记色，统一给一个琥珀色，跟卡区分开。
+    // 文件已经加载不出来的不上色 —— 让 syncHighlight 把它标成失效的红字
     for (const ref of this.quickRefs) {
-      if (ref.file && ref.name) colored.set(ref.name, QREF_COLOR);
+      if (ref.file && ref.name && !ref.broken) colored.set(ref.name, QREF_COLOR);
     }
 
     if (!text) {
@@ -623,25 +630,25 @@ class WorkbenchUI {
       return;
     }
 
-    if (!colored.size) {
-      hl.textContent = text;
-      if (text.endsWith("\n")) hl.append(document.createTextNode(" "));
-      return;
-    }
-
-    const names = [...colored.keys()].sort((a, b) => b.length - a.length);
-    const re = new RegExp("@(" + names.map(escapeRe).join("|") + ")", "g");
-
+    // 所有 @xxx 都要过一遍：认得出来的上色，认不出来的标红。
+    // 标红的意义 —— 临时参考图被拿走 / 名字写了错别字时，提示词里的
+    // 「@参考1」会静静躺在那里不报错，用户以为还在生效，跑出来才发现不对。
+    const re = /@([^\s@,，。、;；:：]+)/g;
     const frag = document.createDocumentFragment();
     let last = 0;
     let m;
     while ((m = re.exec(text))) {
       if (m.index > last) frag.append(document.createTextNode(text.slice(last, m.index)));
       const name = m[1];
+      const color = colored.get(name);
       frag.append(
         el(
           "span",
-          { class: "cw-hl-mention", style: `color:${colored.get(name)}` },
+          {
+            class: "cw-hl-mention" + (color ? "" : " is-dangling"),
+            title: color ? "" : `没有叫「${name}」的参考图：图上台或拖一张临时图进来`,
+            style: color ? `color:${color}` : null,
+          },
           [document.createTextNode(`@${name}`)]
         )
       );

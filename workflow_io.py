@@ -17,8 +17,13 @@
    按 object_info 顺序取 widgets_values 会从这一步起整段错位一格。
 
 2) Autogrow 动态输入（``COMFY_AUTOGROW_V3``）：UI 里叫 ``image_1``，
-   API 里必须写成点号路径 ``images.image_1``。写成扁平的会报
-   ``TypeError: unexpected keyword argument 'image_1'``。
+   API 里必须写成**嵌套 dict** ``{"images": {"image_1": ["5", 0]}}``。
+
+   历史坑：早期版本写成点号路径 ``"images.image_1": [...]``。ComfyUI 0.45
+   起这东西**不报错、不生效** —— validation 原样保留这个 key，执行时节点
+   kwargs 里根本没有它，参考图就被静默丢掉了，出图退化成纯文生图。
+   （实测：同一提示词，点号路径出「独眼怪」，嵌套 dict 出正常参考编辑。）
+   读取侧仍兼容点号路径，老工作流不用重存。
 
 这两条都是实测出来的，别"优化"掉。
 """
@@ -307,9 +312,16 @@ def ui_to_api(ui: dict, obj: dict | None = None) -> tuple[dict, list[str]]:
                 continue
             src = links[lk]
             key = port.get("name") or ""
-            if key in agmap:              # autogrow -> 点号路径
-                key = f"{agmap[key]}.{key}"
-            inputs[key] = [str(src["origin_id"]), src["origin_slot"]]
+            val = [str(src["origin_id"]), src["origin_slot"]]
+            if key in agmap:              # autogrow -> 嵌套 dict（见文件头说明）
+                field = agmap[key]
+                slot = inputs.get(field)
+                if not isinstance(slot, dict):
+                    slot = {}
+                    inputs[field] = slot
+                slot[key] = val
+                continue
+            inputs[key] = val
 
         api[str(node.get("id"))] = {"class_type": t, "inputs": inputs}
 
@@ -430,7 +442,18 @@ def api_to_ui(api: dict, obj: dict | None = None, title: str = "") -> dict:
         ag = autogrow_map(info)
         ag_names = autogrow_names(info)
 
-        for key, val in (node_def.get("inputs") or {}).items():
+        # autogrow 现在存成嵌套 dict（{images: {image_1: [src, slot]}}），
+        # 老文件可能还是点号路径，两种都先摊平再统一处理
+        raw_inputs = node_def.get("inputs") or {}
+        flat_inputs: dict = {}
+        for k, v in raw_inputs.items():
+            if isinstance(v, dict):
+                for sub, subv in v.items():
+                    flat_inputs[sub] = subv
+            else:
+                flat_inputs[k] = v
+
+        for key, val in flat_inputs.items():
             if not (isinstance(val, list) and len(val) == 2):
                 continue
 

@@ -2,9 +2,9 @@
 
 | 项 | 值 |
 |---|---|
-| 版本 | 1.5.0 |
-| 归档日期 | 2026-11-12 |
-| 运行环境 | Windows 10 · ComfyUI · Python 3.13 (venv) · RTX 2080 SUPER 8G |
+| 版本 | 1.5.4 |
+| 归档日期 | 2026-11-17 |
+| 运行环境 | Windows 10 · ComfyUI 0.45.3 · Python 3.10.11（整合包内置）· RTX 3060 Ti 8G |
 | 插件目录 | `ComfyUI/custom_nodes/ComfyUI_SummonDeck/` |
 | 数据目录 | `ComfyUI/user/default/character_workbench/`（**与原名一致，故意没改**） |
 
@@ -200,6 +200,11 @@ user/default/character_workbench/
 | 1.3.2 | 修「移除补充图跳回页首」（重建抽屉时保存/恢复 scrollTop） |
 | 1.4.0 | 编辑抽屉封面常显按钮（裁切换图 / AI 重画）；补图面板改「加入队列」+ 一起补 N 个 + 单格红叉取消；结果区实时预览；快速参考图（拖/粘、`@参考N`、用完即扔） |
 | **1.5.0** | **节点多出「参考图1..6」单路输出（原比例、不补灰），直连 H3 ref2va 这类一路吃一张图的模型；节点头部加「引用标记」下拉（`image {n}` / `<Picture {n}>` / `图{n}`），按节点选而不是全局一套** |
+| 1.5.1（预设） | Qwen 两个预设（`qwen_edit` 补图 / `qwen_t2i` 底稿）内置 `(QWEN)NSFW Qwen by TheseAlpacas V2` LoRA，强度 0.8，接在 `UNETLoader` 与 `QwenImage21Cache` 之间。只动预设，不动 JS/Python 逻辑 |
+| **1.5.2（修复）** | **`workflow_io.ui_to_api` 的 autogrow 序列化从点号路径改成嵌套 dict。ComfyUI 0.45 起 `"images.image_1"` 不报错也不生效，参考图被静默丢弃 —— 所有补图实际是纯文生图。`api_to_ui` 两种格式都读，老画布不用重存** |
+| 1.5.2（预设） | 底座换 `qwen-image-2.1-step90000-FP8-comfy`，cfg 1.0 → **3.0**（这个底座 cfg<1.5 会糊成一片、脸熔掉）；`need.patterns` 改成按优先级排序，当前主用模型写最前面，避免默认挑到同族的 14G bf16 版本 |
+| **1.5.3（回退 + 修根因）** | 底座退回 `(Qwen2.1)redqw21UNLOCKED...V1T2I_bf16`，**移除 LoRA**，cfg 回 1.0 / 20 步。**关键：编码节点由 `TextEncodeQwenImage21`（`images` 参数）改成 `TextEncodeQwenImageEdit`（`image` 入口）** —— 实测前者在纯 T2I 权重上条件被完全忽略，参考图等于没接（给黑发白裙女孩，出图变蓝衬衫男人）；后者身份/发型/服装全保住。预设新增节点 11 做负向（cfg 1.0 不参与计算），`need.patterns` 首选 `*redqw21*` |
+| **1.5.4（多图 + 失效保护）** | ① **`_quick_cards` 给失效文件打 `missing`，`run()` 里把它们从 entities 剔除** —— 之前文件不在了仍占一个编号，`paths` 却不含它，导致后面所有 `image N` 整体前移（实测构图图失效时，`image 1` 变成台上的怪物，整张图跟着跑偏）。② 前端 `syncHighlight` 改成扫描**所有** `@xxx`：认得出的上色，认不出的标红 + 波浪线；临时图 `onerror` 时置 `ref.broken`，不再上色。③ 画布工作流 `Qwen2.1-redqw · 角色卡参考出图.json` 改 `TextEncodeQwenImageEditPlus` + 参考图1/2/3 三路，提示词从「原始提示词」改接「提示词」，新增 `StringConcatenate` 固定说明（image 1 只借场景、不借人脸）|
 
 ---
 

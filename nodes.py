@@ -190,6 +190,11 @@ def _quick_cards(quick) -> list[dict]:
     为什么不另起一套取图逻辑：@ 解析认的是「名字 → 图」，
     角色卡和临时素材在这件事上没有区别。包成同一种形状，
     编号就会自然按 @ 在句子里出现的先后排，不用写两遍。
+
+    **文件已经不在的槽要单独标 ``missing``，不能混进 entities。**
+    它一旦参与编号就会占掉一个名额，却不产生对应的图 ——
+    后面所有 ``image N`` 整体前移，提示词里写好的「image 2 是那个人」
+    会指到别人身上（实测：构图图失效时，整张图变成卡里那个怪物）。
     """
     out: list[dict] = []
     for n, item in enumerate(quick or [], start=1):
@@ -205,6 +210,8 @@ def _quick_cards(quick) -> list[dict]:
             "quickFile": rel,
             # 临时图没有身份设定，设定块里要跳过它
             "descOn": False,
+            # 文件不在了：不参与编号，只在提示里报出来
+            "missing": storage.abs_asset(rel) is None,
         })
     return out
 
@@ -388,9 +395,11 @@ class CharacterWorkbench:
             elif isinstance(item, dict) and item.get("name"):
                 cards.append(item)
 
-        # 临时参考图和角色卡进同一个池子：@谁谁就是 image N，不分贵贱
+        # 临时参考图和角色卡进同一个池子：@谁谁就是 image N，不分贵贱。
+        # 文件已经不在的槽先摘出去 —— 留着会白占一个编号，把后面的图整体顶错位。
         quick_cards = _quick_cards(state.get("quick"))
-        entities = cards + quick_cards
+        missing_quick = [c for c in quick_cards if c.get("missing")]
+        entities = cards + [c for c in quick_cards if not c.get("missing")]
         _dedupe_quick_names(entities)
 
         new_prompt, used_cards, dangling = resolve_prompt(prompt, entities, template)
@@ -471,6 +480,13 @@ class CharacterWorkbench:
                 (settings.get("descMode") or "core").lower(), "身份锚定"
             )
             mapping += f"\n带设定送出：{len(desc_applied)} 张（{mode_label}）"
+        if missing_quick:
+            gone = "、".join(c["name"] for c in missing_quick)
+            mapping += (
+                f"\n\n⚠️ 这些临时参考图的文件已经不在了，已跳过（不占编号）：{gone}\n"
+                "重新拖一张进来即可，名字会自动接回同一个 @，提示词不用改。"
+            )
+            print(f"[怪兽牌组] 临时参考图文件已失效：{gone}")
         if dangling:
             missing = "、".join(dict.fromkeys(dangling))
             mapping += f"\n\n台上没有这些名字，未替换：{missing}"

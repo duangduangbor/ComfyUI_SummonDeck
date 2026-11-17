@@ -101,7 +101,7 @@
         "Node name for S&R": "UNETLoader"
       },
       "widgets_values": [
-        "qwen_image_2.1_int8_convrot.safetensors",
+        "(Qwen2.1)redqw21UNLOCKEDREDGPTK2tAE_redqw21UNLOCKEDV1T2I_bf16.safetensors",
         "default"
       ]
     },
@@ -288,10 +288,10 @@
         42,
         "fixed",
         20,
-        1.0,
+        1,
         "euler",
         "simple",
-        1.0
+        1
       ]
     },
     {
@@ -457,7 +457,7 @@
       ]
     },
     "cwPresetId": "qwen_t2i",
-    "cwGen": 2
+    "cwGen": 3
   },
   "version": 0.4
 }
